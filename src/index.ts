@@ -9,17 +9,23 @@ import { scanRules } from './analyzer/rules-scanner.js';
 import { disambiguateFinding } from './diagnostics/disambiguator.js';
 import { calculateScores, renderProgressBar } from './diagnostics/score.js';
 import { generateOptimizationRecipe } from './generator/recipe-agents-md.js';
+import { applyRecipe } from './generator/apply-recipe.js';
+import { analyzeRepository } from './analyzer/analyze-repository.js';
 import { createCandidateTwin, cleanTwins } from './twin/worktree-manager.js';
 import { generateHtmlReport } from './report/html-generator.js';
 import { startDevServer } from './server/dev-server.js';
 import { ProcessedFinding } from './types/index.js';
+import { auditInstructions } from './analyzer/instruction-audit.js';
 
 const program = new Command();
 
 program
   .name('repotwin')
   .description('RepoTwin — Measure. Optimize. Prove. Diagnostic & Optimization for AI Coding Agents')
-  .version('0.1.0');
+  .version('0.1.0')
+  .option('-r, --from-report <reportFile>', 'Path to an agent report')
+  .option('--html', 'Generate an interactive HTML report')
+  .option('--json', 'Output results as JSON');
 
 type AnalyzeOptions = { fromReport?: string; json?: boolean; html?: boolean; apply?: boolean };
 
@@ -27,8 +33,8 @@ function optionsFrom(...values: unknown[]): AnalyzeOptions {
   const merged: AnalyzeOptions = {};
   for (const value of values) {
     if (!value || typeof value !== 'object') continue;
-    const candidate = value as Record<string, unknown> & { opts?: () => Record<string, unknown> };
-    const source = typeof candidate.opts === 'function' ? candidate.opts() : candidate;
+    const candidate = value as Record<string, unknown> & { opts?: () => Record<string, unknown>; optsWithGlobals?: () => Record<string, unknown> };
+    const source = typeof candidate.optsWithGlobals === 'function' ? candidate.optsWithGlobals() : typeof candidate.opts === 'function' ? candidate.opts() : candidate;
     if (typeof source.fromReport === 'string') merged.fromReport = source.fromReport;
     if (typeof source.json === 'boolean') merged.json = source.json;
     if (typeof source.html === 'boolean') merged.html = source.html;
@@ -66,13 +72,7 @@ function previewOrApplyRecipe(repoPath: string, recipe: ReturnType<typeof genera
     return;
   }
 
-  const backupDir = path.join(repoPath, '.repotwin', 'backups', new Date().toISOString().replace(/[:.]/g, '-'));
-  fs.mkdirSync(backupDir, { recursive: true, mode: 0o700 });
-  for (const target of targets) {
-    const targetPath = path.join(repoPath, target.name);
-    if (fs.existsSync(targetPath)) fs.copyFileSync(targetPath, path.join(backupDir, target.name));
-    writeFileAtomically(targetPath, target.content);
-  }
+  const backupDir = applyRecipe(repoPath, recipe);
   console.log(chalk.bold.green(`\nApplied. Existing files, if any, were backed up to ${backupDir}.`));
 }
 
@@ -80,8 +80,9 @@ function runAnalyze(repoPathArg?: string, options: AnalyzeOptions = {}) {
   const repoPath = path.resolve(repoPathArg || process.cwd());
   assertDirectory(repoPath);
 
-  // 1. Discover subprojects & submodules
-  const subprojects = discoverSubprojects(repoPath);
+  const reportFile = options.fromReport ? path.resolve(options.fromReport) : undefined;
+  const analysis = analyzeRepository(repoPath, reportFile);
+  const { subprojects, processed, falsePositives, trueIssues, scores, recipe } = analysis;
 
   if (!options.json) {
     console.log(chalk.bold.cyan('\n🔍 RepoTwin — Diagnostic & Optimisation Agent IA'));
@@ -103,28 +104,7 @@ function runAnalyze(repoPathArg?: string, options: AnalyzeOptions = {}) {
   }
 
   // 2. Build file index & scan rules
-  const fileSet = buildFileIndex(repoPath, subprojects);
-  const rules = scanRules(repoPath);
-  const knownTables = discoverKnownTables(repoPath, fileSet);
-
-  // 3. Ingest findings from report or default fallback candidates
-  let reportFile: string | null = null;
-  if (options.fromReport) {
-    const candidate = path.resolve(options.fromReport);
-    if (!fs.existsSync(candidate)) {
-      throw new Error(`Report file does not exist: ${candidate}`);
-    }
-    reportFile = candidate;
-  }
-
-  const rawFindings = reportFile ? parseAgentReport(reportFile) : [];
-
-  // 4. Run disambiguation pipeline
-  const ctx = { fileSet, rules, subprojects, knownTables };
-  const processed: ProcessedFinding[] = rawFindings.map(raw => disambiguateFinding(raw, ctx));
-
-  const falsePositives = processed.filter(p => p.isFalsePositive);
-  const trueIssues = processed.filter(p => !p.isFalsePositive);
+  const rawFindings = analysis.findings;
 
   const fpByClassification = new Map<string, ProcessedFinding[]>();
   for (const fp of falsePositives) {
@@ -133,13 +113,13 @@ function runAnalyze(repoPathArg?: string, options: AnalyzeOptions = {}) {
     fpByClassification.set(fp.classification, list);
   }
 
-  const scores = calculateScores(processed);
-  const recipe = generateOptimizationRecipe(repoPath, subprojects, processed);
 
   if (options.json) {
     console.log(JSON.stringify({
       repoPath,
-      scores,
+      scores: scores.evaluated ? scores : null,
+      evaluationStatus: scores.evaluated ? 'evaluated' : 'not_evaluated',
+      instructionAudit: analysis.instructionAudit,
       subprojects,
       totalRawFindings: rawFindings.length,
       falsePositivesCount: falsePositives.length,
@@ -153,6 +133,10 @@ function runAnalyze(repoPathArg?: string, options: AnalyzeOptions = {}) {
   }
 
   // Visual Score Gauges
+  if (!scores.evaluated) console.log('Non évalué : aucun rapport fourni. Les valeurs numériques ne constituent pas un audit.');
+  if (!scores.evaluated) {
+    console.log('Non évalué : fournissez un rapport avec --from-report pour calculer un score.');
+  } else {
   const rawBar = chalk.red(renderProgressBar(scores.rawScore));
   const realBar = chalk.yellow(renderProgressBar(scores.correctedScore));
   const projBar = chalk.green(renderProgressBar(scores.projectedScore));
@@ -164,6 +148,7 @@ function runAnalyze(repoPathArg?: string, options: AnalyzeOptions = {}) {
   console.log(`  Score sans projection        : ${projBar} ${chalk.green.bold(`${scores.projectedScore}/100 (${scores.projectedGrade})`)}  ${chalk.cyan.bold('↳ aucun gain annoncé sans validation')}`);
   console.log('======================================================================');
 
+  }
   console.log(chalk.bold.cyan(`\n🛡️ 3. DÉTAIL DES ${falsePositives.length} FAUX POSITIFS ÉLIMINÉS :`));
   for (const [classification, items] of fpByClassification.entries()) {
     let frenchCategory = classification;
@@ -184,6 +169,15 @@ function runAnalyze(repoPathArg?: string, options: AnalyzeOptions = {}) {
     console.log(`  ${chalk.cyan('✦')} ${chalk.white(change)}`);
   }
 
+  const approxTokens = (text: string) => Math.ceil(text.length / 4);
+  const existingAgentsPath = path.join(repoPath, 'AGENTS.md');
+  const existingAgents = fs.existsSync(existingAgentsPath) ? fs.readFileSync(existingAgentsPath, 'utf-8') : '';
+  console.log(chalk.bold.green('\n📏 5. FAITS MESURÉS (aucune économie de tokens n\'est estimée) :'));
+  console.log(`  ${chalk.green('•')} ${chalk.bold('Références reclassées')}   : ${falsePositives.length} constat(s) du rapport importé`);
+  console.log(`  ${chalk.green('•')} ${chalk.bold('AGENTS.md actuel')}       : ${existingAgents ? `${existingAgents.length} car. (~${approxTokens(existingAgents)} tokens)` : 'absent'}`);
+  console.log(`  ${chalk.green('•')} ${chalk.bold('AGENTS.md proposé')}      : ${recipe.agentsMdContent.length} car. (~${approxTokens(recipe.agentsMdContent)} tokens, estimation car./4)`);
+  console.log(chalk.dim('    Ce fichier peut être chargé dans chaque prompt : un fichier plus long coûte des tokens, il n\'en économise pas.'));
+
   // HTML Report generation if requested
   if (options.html) {
     const reportDir = path.join(repoPath, '.repotwin');
@@ -202,7 +196,7 @@ function runAnalyze(repoPathArg?: string, options: AnalyzeOptions = {}) {
     console.log(chalk.bold.green(`\nHTML report generated: ${chalk.underline(reportPath)}`));
   }
 
-  console.log(chalk.bold.green('\n🚀 5. ACTIONS EN 1 CLIC :'));
+  console.log(chalk.bold.cyan('\n🚀 6. ACTIONS EN 1 CLIC :'));
   console.log(`  • Generate an HTML report: ${chalk.bold.cyan('repotwin analyze --html')}`);
   console.log(`  • Preview the proposed instruction files: ${chalk.bold.yellow('repotwin fix')}`);
   console.log(`  • Apply after review: ${chalk.bold.yellow('repotwin fix --apply')}`);
@@ -226,7 +220,7 @@ program
 
 program
   .command('fix')
-  .description('Apply canonical AGENTS.md and agent-ready.json to maximize score to 96/100 (A)')
+  .description('Preview instruction changes; use --apply to write with backups')
   .argument('[repoPath]', 'Path to repository root (defaults to current directory)')
   .option('--apply', 'Write the generated files after the preview')
   .action((repoPathArg, options, command) => {
@@ -263,7 +257,7 @@ program
       console.log(`  • Twin Path   : ${chalk.bold(twin.twinPath)}`);
       console.log(`  • Branch      : ${chalk.bold(twin.branchName)}`);
       console.log(`  • Modified    : ${twin.filesModified.join(', ')}`);
-      console.log(chalk.magenta(`\nScore before: 0/100 (F) → Score in Twin: 96/100 (A)`));
+      console.log('Candidate created. Review its diff and run verification before applying.');
       console.log(chalk.gray(`Your main branch remains completely untouched.`));
       console.log(`To clean up this twin later, run: node dist/index.js twin clean\n`);
       return;
@@ -278,18 +272,38 @@ program
 
 program
   .command('ui [repoPath]')
+  .alias('studio')
   .description('Launch interactive RepoTwin Studio web UI with live action buttons')
   .option('-p, --port <number>', 'Port to listen on', '4242')
+  .option('-r, --from-report <reportFile>', 'Explicit agent report, shared with analyze')
   .action((repoPathArg, options) => {
     const repoPath = path.resolve(repoPathArg || process.cwd());
     const port = parseInt(options.port || '4242', 10);
-    startDevServer(repoPath, port);
+    if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error('Port must be between 1 and 65535');
+    assertDirectory(repoPath);
+    const reportPath = optionsFrom(options, program).fromReport;
+    startDevServer(repoPath, port, reportPath ? path.resolve(reportPath) : undefined);
   });
 
 // Default action: if no command is given, run analyze on current dir or repo
+program.command('verify [repoPath]')
+  .description('Run fresh instruction-file checks; does not execute project scripts')
+  .action((repoPathArg) => {
+    const repoPath = path.resolve(repoPathArg || process.cwd());
+    assertDirectory(repoPath);
+    const result = auditInstructions(repoPath, discoverSubprojects(repoPath));
+    console.log(JSON.stringify(result, null, 2));
+    if (result.findings.length) process.exitCode = 1;
+  });
+
 program
-  .action(() => {
-    runAnalyze(process.cwd());
+  .argument('[repoPath]', 'Open Studio for a repository from any working directory')
+  .action((repoPathArg, options) => {
+    const repoPath = path.resolve(repoPathArg || process.cwd());
+    assertDirectory(repoPath);
+    const parsed = optionsFrom(options, program);
+    if (parsed.json || parsed.html || parsed.fromReport) runAnalyze(repoPath, parsed);
+    else startDevServer(repoPath);
   });
 
 program.parse(process.argv);

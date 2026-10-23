@@ -1,6 +1,7 @@
 import { ProcessedFinding } from '../types/index.js';
 
 export interface ScoreBreakdown {
+  evaluated?: boolean;
   rawScore: number;
   rawGrade: string;
   correctedScore: number;
@@ -32,7 +33,8 @@ export function renderProgressBar(score: number, total = 100, width = 12): strin
  * Calculates raw, corrected (excluding false positives), and projected (post-twin) readiness scores.
  */
 export function calculateScores(
-  findings: ProcessedFinding[]
+  findings: ProcessedFinding[],
+  evaluated = findings.length > 0
 ): ScoreBreakdown {
   const penaltyFor = (finding: ProcessedFinding): number => {
     switch (finding.raw.rule) {
@@ -48,19 +50,21 @@ export function calculateScores(
   };
 
   const rawPenalties = findings.reduce((total, finding) => total + penaltyFor(finding), 0);
-  const correctedPenalties = findings
-    .filter(finding => !finding.isFalsePositive)
-    .reduce((total, finding) => total + penaltyFor(finding), 0);
+
+  // Calculate false penalties that were wrongfully deducted
+
+  const realFindings = findings.filter(finding => !finding.isFalsePositive);
+  const correctedPenalties = realFindings.reduce((total, finding) => total + penaltyFor(finding), 0);
+
   const rawScore = Math.max(0, 100 - rawPenalties);
   const correctedScore = Math.max(0, 100 - correctedPenalties);
-  const falsePenaltyRestored = rawScore === 0
-    ? Math.min(rawPenalties - correctedPenalties, 100)
-    : correctedScore - rawScore;
+  const falsePenaltyRestored = correctedScore - rawScore;
 
-  // RepoTwin does not promise a score before the user reviews and applies a diff.
+  // Keep the measured score until changes have actually been verified.
   const projectedScore = correctedScore;
 
   return {
+    evaluated,
     rawScore,
     rawGrade: gradeFromScore(rawScore),
     correctedScore: Math.round(correctedScore),

@@ -88,7 +88,7 @@ export function generateHtmlReport(options: HtmlReportOptions, outputPath: strin
         <div class="absolute -right-4 -bottom-4 w-24 h-24 bg-red-500/10 rounded-full blur-2xl"></div>
         <div class="text-xs font-semibold uppercase tracking-wider text-red-400 mb-1">Score Brut (Scanner Externe)</div>
         <div class="flex items-baseline gap-2 mt-2">
-          <span class="text-5xl font-extrabold text-red-400 tracking-tight">${options.scores.rawScore}</span>
+          <span class="text-5xl font-extrabold text-red-400 tracking-tight">${options.scores.evaluated === false ? 'Non évalué' : options.scores.rawScore}</span>
           <span class="text-gray-500 text-sm">/ 100</span>
           <span class="px-2 py-0.5 text-xs rounded bg-red-500/10 text-red-400 border border-red-500/20 font-bold ml-auto">${options.scores.rawGrade}</span>
         </div>
@@ -102,7 +102,7 @@ export function generateHtmlReport(options: HtmlReportOptions, outputPath: strin
         <div class="absolute -right-4 -bottom-4 w-24 h-24 bg-amber-500/10 rounded-full blur-2xl"></div>
         <div class="text-xs font-semibold uppercase tracking-wider text-amber-400 mb-1">Score Réel RepoTwin</div>
         <div class="flex items-baseline gap-2 mt-2">
-          <span class="text-5xl font-extrabold text-amber-400 tracking-tight">${options.scores.correctedScore}</span>
+          <span class="text-5xl font-extrabold text-amber-400 tracking-tight">${options.scores.evaluated === false ? 'Non évalué' : options.scores.correctedScore}</span>
           <span class="text-gray-500 text-sm">/ 100</span>
           <span class="px-2 py-0.5 text-xs rounded bg-amber-500/10 text-amber-400 border border-amber-500/20 font-bold ml-auto">${options.scores.correctedGrade}</span>
         </div>
@@ -116,7 +116,7 @@ export function generateHtmlReport(options: HtmlReportOptions, outputPath: strin
         <div class="absolute -right-4 -bottom-4 w-24 h-24 bg-emerald-500/20 rounded-full blur-2xl"></div>
         <div class="text-xs font-semibold uppercase tracking-wider text-emerald-400 mb-1">Potentiel Post-Twin</div>
         <div class="flex items-baseline gap-2 mt-2">
-          <span class="text-5xl font-extrabold text-emerald-400 tracking-tight">${options.scores.projectedScore}</span>
+          <span class="text-5xl font-extrabold text-emerald-400 tracking-tight">${options.scores.evaluated === false ? 'Non évalué' : options.scores.projectedScore}</span>
           <span class="text-gray-500 text-sm">/ 100</span>
           <span class="px-2 py-0.5 text-xs rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-bold ml-auto">${options.scores.projectedGrade}</span>
         </div>

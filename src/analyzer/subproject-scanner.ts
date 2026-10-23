@@ -56,15 +56,15 @@ export function discoverSubprojects(repoPath: string): SubprojectInfo[] {
       }
     }
 
-    const knownManifests: Array<[string, SubprojectInfo['kind'], string | undefined, string | undefined]> = [
-      ['pubspec.yaml', 'flutter', 'flutter test', 'flutter build'],
-      ['pyproject.toml', 'python', 'pytest', undefined],
-      ['Cargo.toml', 'rust', 'cargo test', 'cargo build'],
-      ['go.mod', 'go', 'go test ./...', 'go build ./...']
+    const knownManifests: Array<[string, SubprojectInfo['kind'], string | undefined, string | undefined, string | undefined]> = [
+      ['pubspec.yaml', 'flutter', 'flutter test', undefined, 'flutter analyze'],
+      ['pyproject.toml', 'python', 'pytest', undefined, undefined],
+      ['Cargo.toml', 'rust', 'cargo test', 'cargo build', undefined],
+      ['go.mod', 'go', 'go test ./...', 'go build ./...', undefined]
     ];
-    for (const [manifest, kind, testScript, buildScript] of knownManifests) {
+    for (const [manifest, kind, testScript, buildScript, lintScript] of knownManifests) {
       if (fs.existsSync(path.join(absPath, manifest))) {
-        subprojects.push({ name, relPath, absPath, kind, isSubmodule, testScript, buildScript });
+        subprojects.push({ name, relPath, absPath, kind, isSubmodule, testScript, buildScript, lintScript });
         seen.add(relPath);
         return true;
       }
@@ -100,11 +100,6 @@ export function discoverSubprojects(repoPath: string): SubprojectInfo[] {
   };
 
   walk(repoPath, '.', 0);
-
-  // If the repository uses Git submodules, only return the official declared submodules
-  if (submoduleNames.size > 0) {
-    return subprojects.filter(s => s.isSubmodule);
-  }
 
   return subprojects;
 }

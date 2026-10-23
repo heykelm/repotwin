@@ -149,10 +149,18 @@ function classifyPathReference(
 
   // Level 4: Database column reference (table.column format)
   // Example: rides.price, rides.datetime
+  const KNOWN_CODE_EXTENSIONS = new Set([
+    '.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs', '.json', '.md', '.mdc', '.sql',
+    '.yaml', '.yml', '.dart', '.py', '.rs', '.go', '.sh', '.html', '.css', '.scss',
+    '.toml', '.lock', '.xml', '.svg', '.png', '.jpg', '.jpeg', '.gif', '.ico'
+  ]);
   const isDbColumnPattern = /^[a-z0-9_]+\.[a-z0-9_]+$/i.test(cleanRef);
-  const hasNoExtension = !path.extname(cleanRef) || cleanRef.endsWith('.price') || cleanRef.endsWith('.datetime');
-  if (isDbColumnPattern && hasNoExtension && ctx.knownTables?.has(cleanRef.split('.')[0])) {
-    const tableName = cleanRef.split('.')[0];
+  const ext = path.extname(cleanRef).toLowerCase();
+  const isNonCodeExt = !ext || !KNOWN_CODE_EXTENSIONS.has(ext);
+  const isExplicitSqlField = cleanRef.endsWith('.price') || cleanRef.endsWith('.datetime') || cleanRef.endsWith('.id') || cleanRef.endsWith('.status') || cleanRef.endsWith('.amount');
+  const matchesKnownTable = ctx.knownTables ? ctx.knownTables.has(cleanRef.split('.')[0]) : false;
+
+  if (isDbColumnPattern && (isExplicitSqlField || matchesKnownTable || (isNonCodeExt && !ctx.fileSet.has(cleanRef)))) {
     return {
       raw,
       targetRef,
