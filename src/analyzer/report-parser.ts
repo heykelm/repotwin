@@ -1,5 +1,19 @@
 import fs from 'node:fs';
+import { z } from 'zod';
 import { RawFinding, Severity } from '../types/index.js';
+
+const rawFindingSchema = z.object({
+  severity: z.enum(['error', 'warning', 'info']).default('info'),
+  rule: z.string().default(''),
+  message: z.string().default(''),
+  file: z.string().default(''),
+  fix: z.string().default('')
+});
+
+const jsonReportSchema = z.union([
+  z.array(rawFindingSchema),
+  z.object({ findings: z.array(rawFindingSchema) })
+]);
 
 /**
  * Parses an agent-ready markdown report table or JSON export.
@@ -16,16 +30,11 @@ export function parseAgentReport(reportPath: string): RawFinding[] {
   if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
     try {
       const parsed = JSON.parse(trimmed);
-      const findings = Array.isArray(parsed) ? parsed : (parsed.findings || []);
-      return findings.map((f: any) => ({
-        severity: (f.severity || 'info') as Severity,
-        rule: f.rule || '',
-        message: f.message || '',
-        file: f.file || '',
-        fix: f.fix || ''
-      }));
-    } catch {
-      // Fallback to markdown table parsing
+      const validated = jsonReportSchema.parse(parsed);
+      const findings = Array.isArray(validated) ? validated : validated.findings;
+      return findings.map(finding => ({ ...finding, severity: finding.severity as Severity }));
+    } catch (error) {
+      throw new Error(`Invalid JSON report: ${error instanceof Error ? error.message : 'unknown error'}`);
     }
   }
 

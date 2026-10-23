@@ -42,7 +42,8 @@ describe('RepoTwin Disambiguator', () => {
   const ctx = {
     fileSet: dummyFileSet,
     rules: dummyRules,
-    subprojects: dummySubprojects
+    subprojects: dummySubprojects,
+    knownTables: new Set(['rides'])
   };
 
   it('extracts targetRef properly from agent-ready message', () => {
@@ -120,5 +121,19 @@ describe('RepoTwin Disambiguator', () => {
     expect(res.isFalsePositive).toBe(true);
     expect(res.classification).toBe('EXISTS_SINGLE_MATCH');
     expect(res.resolvedPath).toBe('migrations/073_b2b_providers_v1.sql');
+  });
+
+  it('keeps an unresolved alias as an issue instead of suppressing it', () => {
+    const raw: RawFinding = {
+      severity: 'warning',
+      rule: 'stale-path-reference',
+      message: '.cursor/rules/frontend-admin.mdc references missing path "@/missing/component".',
+      file: '.cursor/rules/frontend-admin.mdc',
+      fix: 'Update path'
+    };
+
+    const res = disambiguateFinding(raw, ctx);
+    expect(res.isFalsePositive).toBe(false);
+    expect(res.classification).toBe('UNKNOWN');
   });
 });

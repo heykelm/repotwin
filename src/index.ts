@@ -3,15 +3,15 @@ import { Command } from 'commander';
 import chalk from 'chalk';
 import path from 'node:path';
 import fs from 'node:fs';
-import { execSync } from 'node:child_process';
 import { parseAgentReport } from './analyzer/report-parser.js';
-import { discoverSubprojects, buildFileIndex } from './analyzer/subproject-scanner.js';
+import { discoverSubprojects, buildFileIndex, discoverKnownTables } from './analyzer/subproject-scanner.js';
 import { scanRules } from './analyzer/rules-scanner.js';
 import { disambiguateFinding } from './diagnostics/disambiguator.js';
 import { calculateScores, renderProgressBar } from './diagnostics/score.js';
 import { generateOptimizationRecipe } from './generator/recipe-agents-md.js';
 import { createCandidateTwin, cleanTwins } from './twin/worktree-manager.js';
 import { generateHtmlReport } from './report/html-generator.js';
+import { startDevServer } from './server/dev-server.js';
 import { ProcessedFinding } from './types/index.js';
 
 const program = new Command();
@@ -21,13 +21,64 @@ program
   .description('RepoTwin — Measure. Optimize. Prove. Diagnostic & Optimization for AI Coding Agents')
   .version('0.1.0');
 
-function runAnalyze(repoPathArg?: string, options: { fromReport?: string; json?: boolean; html?: boolean } = {}) {
-  const repoPath = path.resolve(repoPathArg || process.cwd());
+type AnalyzeOptions = { fromReport?: string; json?: boolean; html?: boolean; apply?: boolean };
 
-  if (!fs.existsSync(repoPath)) {
-    console.error(chalk.red(`Error: Repository path "${repoPath}" does not exist.`));
-    process.exit(1);
+function optionsFrom(...values: unknown[]): AnalyzeOptions {
+  const merged: AnalyzeOptions = {};
+  for (const value of values) {
+    if (!value || typeof value !== 'object') continue;
+    const candidate = value as Record<string, unknown> & { opts?: () => Record<string, unknown> };
+    const source = typeof candidate.opts === 'function' ? candidate.opts() : candidate;
+    if (typeof source.fromReport === 'string') merged.fromReport = source.fromReport;
+    if (typeof source.json === 'boolean') merged.json = source.json;
+    if (typeof source.html === 'boolean') merged.html = source.html;
+    if (typeof source.apply === 'boolean') merged.apply = source.apply;
   }
+  return merged;
+}
+
+function assertDirectory(repoPath: string): void {
+  if (!fs.existsSync(repoPath) || !fs.statSync(repoPath).isDirectory()) {
+    throw new Error(`Repository path is not a directory: ${repoPath}`);
+  }
+}
+
+function writeFileAtomically(target: string, content: string): void {
+  const temporary = `${target}.${process.pid}.tmp`;
+  fs.writeFileSync(temporary, content, { encoding: 'utf-8', mode: 0o600 });
+  fs.renameSync(temporary, target);
+}
+
+function previewOrApplyRecipe(repoPath: string, recipe: ReturnType<typeof generateOptimizationRecipe>, apply: boolean): void {
+  const targets = [
+    { name: 'AGENTS.md', content: recipe.agentsMdContent },
+    { name: 'agent-ready.json', content: recipe.agentReadyJsonContent }
+  ];
+
+  console.log(chalk.cyan(`\nProposed changes for ${repoPath}:`));
+  for (const target of targets) {
+    const exists = fs.existsSync(path.join(repoPath, target.name));
+    console.log(`  ${exists ? 'modify' : 'create'} ${target.name}`);
+  }
+
+  if (!apply) {
+    console.log(chalk.yellow('\nNo file was written. Review the candidate with `repotwin twin create` or rerun with `repotwin fix --apply`.'));
+    return;
+  }
+
+  const backupDir = path.join(repoPath, '.repotwin', 'backups', new Date().toISOString().replace(/[:.]/g, '-'));
+  fs.mkdirSync(backupDir, { recursive: true, mode: 0o700 });
+  for (const target of targets) {
+    const targetPath = path.join(repoPath, target.name);
+    if (fs.existsSync(targetPath)) fs.copyFileSync(targetPath, path.join(backupDir, target.name));
+    writeFileAtomically(targetPath, target.content);
+  }
+  console.log(chalk.bold.green(`\nApplied. Existing files, if any, were backed up to ${backupDir}.`));
+}
+
+function runAnalyze(repoPathArg?: string, options: AnalyzeOptions = {}) {
+  const repoPath = path.resolve(repoPathArg || process.cwd());
+  assertDirectory(repoPath);
 
   // 1. Discover subprojects & submodules
   const subprojects = discoverSubprojects(repoPath);
@@ -54,27 +105,22 @@ function runAnalyze(repoPathArg?: string, options: { fromReport?: string; json?:
   // 2. Build file index & scan rules
   const fileSet = buildFileIndex(repoPath, subprojects);
   const rules = scanRules(repoPath);
+  const knownTables = discoverKnownTables(repoPath, fileSet);
 
   // 3. Ingest findings from report or default fallback candidates
   let reportFile: string | null = null;
-  const candidates = [
-    options.fromReport ? path.resolve(options.fromReport) : null,
-    path.resolve(process.cwd(), 'fixtures/nicehub-agent-report.md'),
-    path.join(path.dirname(new URL(import.meta.url).pathname), '../fixtures/nicehub-agent-report.md'),
-    '/tmp/nicehub-agent-report.md'
-  ].filter(Boolean) as string[];
-
-  for (const cand of candidates) {
-    if (fs.existsSync(cand)) {
-      reportFile = cand;
-      break;
+  if (options.fromReport) {
+    const candidate = path.resolve(options.fromReport);
+    if (!fs.existsSync(candidate)) {
+      throw new Error(`Report file does not exist: ${candidate}`);
     }
+    reportFile = candidate;
   }
 
   const rawFindings = reportFile ? parseAgentReport(reportFile) : [];
 
   // 4. Run disambiguation pipeline
-  const ctx = { fileSet, rules, subprojects };
+  const ctx = { fileSet, rules, subprojects, knownTables };
   const processed: ProcessedFinding[] = rawFindings.map(raw => disambiguateFinding(raw, ctx));
 
   const falsePositives = processed.filter(p => p.isFalsePositive);
@@ -87,7 +133,7 @@ function runAnalyze(repoPathArg?: string, options: { fromReport?: string; json?:
     fpByClassification.set(fp.classification, list);
   }
 
-  const scores = calculateScores(processed, 0);
+  const scores = calculateScores(processed);
   const recipe = generateOptimizationRecipe(repoPath, subprojects, processed);
 
   if (options.json) {
@@ -113,9 +159,9 @@ function runAnalyze(repoPathArg?: string, options: { fromReport?: string; json?:
 
   console.log(chalk.bold.magenta('\n📊 2. BILAN COMPARATIF : SCORE AVANT VS APRÈS'));
   console.log('======================================================================');
-  console.log(`  Score Initial (agent-ready) : ${rawBar}  ${chalk.red.bold(`${scores.rawScore}/100 (${scores.rawGrade})`)}  ${chalk.gray('↳ Faux échec (aveugle aux sous-projets)')}`);
-  console.log(`  Score Réel RepoTwin         : ${realBar} ${chalk.yellow.bold(`${scores.correctedScore}/100 (${scores.correctedGrade})`)}  ${chalk.green(`↳ +${scores.falsePenaltyRestored} pts restitués`)}`);
-  console.log(`  Score Projeté Post-Twin     : ${projBar} ${chalk.green.bold(`${scores.projectedScore}/100 (${scores.projectedGrade})`)}  ${chalk.cyan.bold('↳ Cible atteinte via Twin (+96 pts)')}`);
+  console.log(`  Score brut importé           : ${rawBar}  ${chalk.red.bold(`${scores.rawScore}/100 (${scores.rawGrade})`)}`);
+  console.log(`  Score après désambiguïsation : ${realBar} ${chalk.yellow.bold(`${scores.correctedScore}/100 (${scores.correctedGrade})`)}  ${chalk.green(`↳ +${scores.falsePenaltyRestored} pts justifiés`)}`);
+  console.log(`  Score sans projection        : ${projBar} ${chalk.green.bold(`${scores.projectedScore}/100 (${scores.projectedGrade})`)}  ${chalk.cyan.bold('↳ aucun gain annoncé sans validation')}`);
   console.log('======================================================================');
 
   console.log(chalk.bold.cyan(`\n🛡️ 3. DÉTAIL DES ${falsePositives.length} FAUX POSITIFS ÉLIMINÉS :`));
@@ -139,9 +185,10 @@ function runAnalyze(repoPathArg?: string, options: { fromReport?: string; json?:
   }
 
   // HTML Report generation if requested
-  const isHtml = Boolean(options.html || program.opts().html);
-  if (isHtml) {
-    const reportPath = path.join(process.cwd(), 'repotwin-report.html');
+  if (options.html) {
+    const reportDir = path.join(repoPath, '.repotwin');
+    fs.mkdirSync(reportDir, { recursive: true, mode: 0o700 });
+    const reportPath = path.join(reportDir, 'report.html');
     generateHtmlReport({
       repoPath,
       scores,
@@ -152,33 +199,28 @@ function runAnalyze(repoPathArg?: string, options: { fromReport?: string; json?:
       newAgentsMd: recipe.agentsMdContent
     }, reportPath);
 
-    console.log(chalk.bold.green(`\n🌐 Rapport HTML généré : ${chalk.underline(reportPath)}`));
-    try {
-      execSync(`open "${reportPath}" 2>/dev/null`);
-      console.log(chalk.gray(`Rapport ouvert automatiquement dans votre navigateur.`));
-    } catch {
-      // ignore
-    }
+    console.log(chalk.bold.green(`\nHTML report generated: ${chalk.underline(reportPath)}`));
   }
 
   console.log(chalk.bold.green('\n🚀 5. ACTIONS EN 1 CLIC :'));
-  console.log(`  • Ouvrir le rapport HTML interactif : ${chalk.bold.cyan('node dist/index.js --html')}`);
-  console.log(`  • Appliquer la correction en 1 seconde : ${chalk.bold.yellow('node dist/index.js fix')}`);
+  console.log(`  • Generate an HTML report: ${chalk.bold.cyan('repotwin analyze --html')}`);
+  console.log(`  • Preview the proposed instruction files: ${chalk.bold.yellow('repotwin fix')}`);
+  console.log(`  • Apply after review: ${chalk.bold.yellow('repotwin fix --apply')}`);
   console.log(`  • Tester dans un jumeau isolé : ${chalk.bold.yellow(`node dist/index.js twin create "${repoPath}"`)}\n`);
 }
 
 program
   .command('analyze [repoPath]')
   .description('Analyze a repository and show before/after readiness scores')
-  .option('-r, --from-report <reportFile>', 'Path to agent-ready markdown/json report')
-  .option('--html', 'Generate and open a modern interactive HTML report')
+  .option('-r, --from-report <reportFile>', 'Path to an agent report')
+  .option('--html', 'Generate an HTML report')
   .option('--json', 'Output results as JSON')
   .action((repoPath, options, command) => {
     // If repoPath was omitted, commander might pass options in repoPath
     if (typeof repoPath === 'object' && repoPath !== null) {
-      runAnalyze(process.cwd(), repoPath);
+      runAnalyze(process.cwd(), optionsFrom(repoPath, options, command));
     } else {
-      runAnalyze(repoPath, options);
+      runAnalyze(repoPath, optionsFrom(options, command));
     }
   });
 
@@ -186,21 +228,14 @@ program
   .command('fix')
   .description('Apply canonical AGENTS.md and agent-ready.json to maximize score to 96/100 (A)')
   .argument('[repoPath]', 'Path to repository root (defaults to current directory)')
-  .action((repoPathArg) => {
+  .option('--apply', 'Write the generated files after the preview')
+  .action((repoPathArg, options, command) => {
     const repoPath = path.resolve(repoPathArg || process.cwd());
+    assertDirectory(repoPath);
     const subprojects = discoverSubprojects(repoPath);
-    const fileSet = buildFileIndex(repoPath, subprojects);
-    const rules = scanRules(repoPath);
     const recipe = generateOptimizationRecipe(repoPath, subprojects, []);
-
-    console.log(chalk.cyan(`\n🛠️  Application de l'optimisation RepoTwin sur : ${repoPath}`));
-    fs.writeFileSync(path.join(repoPath, 'AGENTS.md'), recipe.agentsMdContent, 'utf-8');
-    fs.writeFileSync(path.join(repoPath, 'agent-ready.json'), recipe.agentReadyJsonContent, 'utf-8');
-
-    console.log(chalk.bold.green('\n🎉 Optimisation terminée avec succès !'));
-    console.log(`  ✓ AGENTS.md généré avec les règles de sécurité et les commandes de test.`);
-    console.log(`  ✓ agent-ready.json créé pour unifier les scanners.`);
-    console.log(chalk.bold.magenta('\nNouveau Score de Préparation : [█████████▉] 96/100 (A)\n'));
+    const parsedOptions = optionsFrom(options, command);
+    previewOrApplyRecipe(repoPath, recipe, parsedOptions.apply === true);
   });
 
 program
@@ -212,8 +247,9 @@ program
     const repoPath = path.resolve(repoPathArg || process.cwd());
 
     if (action === 'clean') {
-      const count = cleanTwins(repoPath);
-      console.log(chalk.green(`\n🧹 Cleaned up ${count} RepoTwin experimental worktrees.`));
+      const result = cleanTwins(repoPath);
+      console.log(chalk.green(`\n🧹 Cleaned up ${result.cleaned} RepoTwin experimental worktrees.`));
+      if (result.skippedDirty) console.log(chalk.yellow(`Skipped ${result.skippedDirty} dirty twin(s) to preserve their changes.`));
       return;
     }
 
@@ -234,21 +270,26 @@ program
     }
 
     if (action === 'apply') {
-      fs.writeFileSync(path.join(repoPath, 'AGENTS.md'), recipe.agentsMdContent, 'utf-8');
-      fs.writeFileSync(path.join(repoPath, 'agent-ready.json'), recipe.agentReadyJsonContent, 'utf-8');
-      console.log(chalk.bold.green(`\n🎉 Applied successfully! New Score: 96/100 (A)\n`));
-      return;
+      throw new Error('`twin apply` is intentionally disabled. Review the isolated twin, then use `repotwin fix --apply` on the target repository.');
     }
 
     console.error(chalk.red(`Unknown action "${action}". Use "create", "apply", or "clean".`));
   });
 
+program
+  .command('ui [repoPath]')
+  .description('Launch interactive RepoTwin Studio web UI with live action buttons')
+  .option('-p, --port <number>', 'Port to listen on', '4242')
+  .action((repoPathArg, options) => {
+    const repoPath = path.resolve(repoPathArg || process.cwd());
+    const port = parseInt(options.port || '4242', 10);
+    startDevServer(repoPath, port);
+  });
+
 // Default action: if no command is given, run analyze on current dir or repo
 program
-  .option('--html', 'Generate and open a modern interactive HTML report')
-  .option('--json', 'Output results as JSON')
-  .action((options) => {
-    runAnalyze(process.cwd(), options);
+  .action(() => {
+    runAnalyze(process.cwd());
   });
 
 program.parse(process.argv);

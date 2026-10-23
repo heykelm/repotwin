@@ -4,3 +4,4 @@ dist/
 *.log
 .cache/
 .repotwin/
+repotwin-report.html

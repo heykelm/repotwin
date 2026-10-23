@@ -151,7 +151,7 @@ function classifyPathReference(
   // Example: rides.price, rides.datetime
   const isDbColumnPattern = /^[a-z0-9_]+\.[a-z0-9_]+$/i.test(cleanRef);
   const hasNoExtension = !path.extname(cleanRef) || cleanRef.endsWith('.price') || cleanRef.endsWith('.datetime');
-  if (isDbColumnPattern && hasNoExtension) {
+  if (isDbColumnPattern && hasNoExtension && ctx.knownTables?.has(cleanRef.split('.')[0])) {
     const tableName = cleanRef.split('.')[0];
     return {
       raw,
@@ -203,10 +203,11 @@ function classifyPathReference(
     return {
       raw,
       targetRef,
-      classification: 'PATH_ALIAS',
-      isFalsePositive: true,
-      confidence: 0.8,
-      explanation: `Module alias (${cleanRef}), not a raw relative filesystem path.`
+      classification: 'UNKNOWN',
+      isFalsePositive: false,
+      confidence: 0.45,
+      explanation: `Module alias (${cleanRef}) could not be resolved from project configuration.`,
+      suggestedAction: 'Verify the alias in tsconfig/jsconfig or update the reference.'
     };
   }
 

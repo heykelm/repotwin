@@ -20,10 +20,10 @@ export function generateHtmlReport(options: HtmlReportOptions, outputPath: strin
     <tr class="border-b border-gray-800 hover:bg-gray-800/40 transition">
       <td class="py-3 px-4 font-semibold text-white flex items-center gap-2">
         <span class="w-2 h-2 rounded-full ${sub.testScript ? 'bg-emerald-400' : 'bg-amber-400'}"></span>
-        ${sub.name} <span class="text-xs text-gray-500 font-mono">(${sub.relPath}/)</span>
+        ${escapeHtml(sub.name)} <span class="text-xs text-gray-500 font-mono">(${escapeHtml(sub.relPath)}/)</span>
       </td>
-      <td class="py-3 px-4 text-gray-400 font-mono text-sm">${sub.kind}</td>
-      <td class="py-3 px-4 text-emerald-400 font-mono text-xs">${sub.testScript || '<span class="text-gray-500">Aucun test</span>'}</td>
+      <td class="py-3 px-4 text-gray-400 font-mono text-sm">${escapeHtml(sub.kind)}</td>
+      <td class="py-3 px-4 text-emerald-400 font-mono text-xs">${sub.testScript ? escapeHtml(sub.testScript) : '<span class="text-gray-500">Aucun test</span>'}</td>
       <td class="py-3 px-4 text-gray-400 text-xs">${sub.isSubmodule ? 'Git Submodule' : 'Dossier'}</td>
     </tr>
   `).join('');
@@ -31,11 +31,11 @@ export function generateHtmlReport(options: HtmlReportOptions, outputPath: strin
   const fpItemsHtml = options.falsePositives.map(fp => `
     <div class="p-3 bg-gray-900/60 border border-gray-800 rounded-lg flex items-start gap-3 text-sm">
       <span class="px-2 py-0.5 rounded text-xs font-mono font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-        ${fp.classification}
+        ${escapeHtml(fp.classification)}
       </span>
       <div class="flex-1 min-w-0">
-        <div class="font-mono text-white text-xs font-medium truncate">${fp.targetRef || fp.raw.message}</div>
-        <div class="text-gray-400 text-xs mt-0.5">${fp.explanation}</div>
+        <div class="font-mono text-white text-xs font-medium truncate">${escapeHtml(fp.targetRef || fp.raw.message)}</div>
+        <div class="text-gray-400 text-xs mt-0.5">${escapeHtml(fp.explanation)}</div>
       </div>
     </div>
   `).join('');
@@ -45,7 +45,7 @@ export function generateHtmlReport(options: HtmlReportOptions, outputPath: strin
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>RepoTwin Audit — ${repoName}</title>
+  <title>RepoTwin Audit — ${escapeHtml(repoName)}</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -76,7 +76,7 @@ export function generateHtmlReport(options: HtmlReportOptions, outputPath: strin
       </div>
       <div class="flex items-center gap-2 font-mono text-xs text-gray-400 bg-gray-900 px-3 py-1.5 rounded-lg border border-gray-800">
         <span class="text-gray-500">Cible:</span>
-        <span class="text-white font-medium truncate max-w-xs">${options.repoPath}</span>
+        <span class="text-white font-medium truncate max-w-xs">${escapeHtml(options.repoPath)}</span>
       </div>
     </header>
 
@@ -93,7 +93,7 @@ export function generateHtmlReport(options: HtmlReportOptions, outputPath: strin
           <span class="px-2 py-0.5 text-xs rounded bg-red-500/10 text-red-400 border border-red-500/20 font-bold ml-auto">${options.scores.rawGrade}</span>
         </div>
         <p class="text-xs text-gray-400 mt-4 leading-relaxed">
-          Pénalisé à tort par 21 fausses alertes dues à l'incompréhension des sous-projets.
+          Score calculé à partir des constats importés, avant désambiguïsation.
         </p>
       </div>
 
@@ -121,7 +121,7 @@ export function generateHtmlReport(options: HtmlReportOptions, outputPath: strin
           <span class="px-2 py-0.5 text-xs rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-bold ml-auto">${options.scores.projectedGrade}</span>
         </div>
         <p class="text-xs text-indigo-300 mt-4 leading-relaxed font-medium">
-          🚀 Atteignable immédiatement en appliquant le jumeau recommandé.
+          Projection neutre : aucun gain n'est annoncé avant validation des changements.
         </p>
       </div>
 
@@ -155,7 +155,7 @@ export function generateHtmlReport(options: HtmlReportOptions, outputPath: strin
         <h2 class="text-base font-bold text-white flex items-center gap-2">
           <span>🛡️</span> Faux Positifs Éliminés par RepoTwin (${options.falsePositives.length})
         </h2>
-        <span class="text-xs text-emerald-400 font-mono font-medium">100% des chemins "manquants" résolus</span>
+        <span class="text-xs text-emerald-400 font-mono font-medium">Résultats vérifiés par classification</span>
       </div>
       <div class="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-96 overflow-y-auto pr-1">
         ${fpItemsHtml}
@@ -169,11 +169,11 @@ export function generateHtmlReport(options: HtmlReportOptions, outputPath: strin
           <span>💡</span> Amélioration Recommandée : Le Nouveau AGENTS.md
         </h2>
         <span class="px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-          Prêt à appliquer (+96 pts)
+          À prévisualiser avant application
         </span>
       </div>
       <ul class="space-y-1.5 mb-6 text-xs text-gray-300">
-        ${options.proposedFixes.map(f => `<li class="flex items-center gap-2"><span class="text-indigo-400">✦</span> ${f}</li>`).join('')}
+        ${options.proposedFixes.map(f => `<li class="flex items-center gap-2"><span class="text-indigo-400">✦</span> ${escapeHtml(f)}</li>`).join('')}
       </ul>
 
       <div class="bg-gray-950 rounded-xl p-4 border border-gray-800">
@@ -185,7 +185,7 @@ export function generateHtmlReport(options: HtmlReportOptions, outputPath: strin
           Pour appliquer ces modifications en 1 clic dans votre terminal :
         </div>
         <div class="bg-gray-950 px-3 py-1.5 rounded-lg border border-gray-800 text-xs font-mono text-emerald-400 font-bold ml-auto">
-          repotwin fix
+          repotwin fix --apply
         </div>
       </div>
     </section>

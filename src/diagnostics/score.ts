@@ -32,49 +32,42 @@ export function renderProgressBar(score: number, total = 100, width = 12): strin
  * Calculates raw, corrected (excluding false positives), and projected (post-twin) readiness scores.
  */
 export function calculateScores(
-  findings: ProcessedFinding[],
-  rawScoreFromReport = 0
+  findings: ProcessedFinding[]
 ): ScoreBreakdown {
-  // Agent-ready penalty model approximation:
-  // - Stale path: -5 pts per instance
-  // - Missing test command: -20 pts
-  // - Missing lint: -10 pts
-  // - Missing safety: -2 pts per doc
-  // - Missing verification: -2 pts per doc
-  // - Drift: -1 pt per doc
-
-  let falsePenaltyRestored = 0;
-
-  for (const f of findings) {
-    if (!f.isFalsePositive) continue;
-
-    if (f.classification === 'EXISTS_RULE_SCOPE' || 
-        f.classification === 'EXISTS_ROOT' || 
-        f.classification === 'EXISTS_SUBPROJECT' || 
-        f.classification === 'EXISTS_SINGLE_MATCH') {
-      falsePenaltyRestored += 5;
-    } else if (f.classification === 'SQL_DATABASE_ENTITY') {
-      falsePenaltyRestored += 5;
-    } else if (f.classification === 'PATH_ALIAS' || f.classification === 'PATTERN_OR_I18N') {
-      falsePenaltyRestored += 5;
-    } else if (f.classification === 'IGNORED_FILE') {
-      falsePenaltyRestored += 5;
+  const penaltyFor = (finding: ProcessedFinding): number => {
+    switch (finding.raw.rule) {
+      case 'stale-path-reference': return 5;
+      case 'missing-test-command': return 20;
+      case 'missing-lint-command': return 10;
+      case 'missing-safety-section':
+      case 'missing-verification-section': return 2;
+      case 'drift-prone-agent-doc': return 1;
+      default:
+        return finding.raw.severity === 'error' ? 10 : finding.raw.severity === 'warning' ? 5 : 1;
     }
-  }
+  };
 
-  // Calculate real current score
-  // If raw was 0, it was heavily submerged by false penalties
-  const correctedScore = Math.min(100, Math.max(0, 15 + Math.min(55, falsePenaltyRestored)));
-  const projectedScore = 96; // After applying AGENTS.md safety + verification + unification
+  const rawPenalties = findings.reduce((total, finding) => total + penaltyFor(finding), 0);
+  const correctedPenalties = findings
+    .filter(finding => !finding.isFalsePositive)
+    .reduce((total, finding) => total + penaltyFor(finding), 0);
+  const rawScore = Math.max(0, 100 - rawPenalties);
+  const correctedScore = Math.max(0, 100 - correctedPenalties);
+  const falsePenaltyRestored = rawScore === 0
+    ? Math.min(rawPenalties - correctedPenalties, 100)
+    : correctedScore - rawScore;
+
+  // RepoTwin does not promise a score before the user reviews and applies a diff.
+  const projectedScore = correctedScore;
 
   return {
-    rawScore: rawScoreFromReport,
-    rawGrade: gradeFromScore(rawScoreFromReport),
+    rawScore,
+    rawGrade: gradeFromScore(rawScore),
     correctedScore: Math.round(correctedScore),
     correctedGrade: gradeFromScore(correctedScore),
     projectedScore,
     projectedGrade: gradeFromScore(projectedScore),
     falsePenaltyRestored,
-    remainingPenalties: 100 - projectedScore
+    remainingPenalties: correctedPenalties
   };
 }

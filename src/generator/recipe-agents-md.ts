@@ -59,7 +59,7 @@ ${subprojectRows}
 `.trim();
 
   // Combine into canonical AGENTS.md
-  let canonicalAgentsMd = `# NiceHub Platform — Canonical AI Agent Instructions\n\n`;
+  let canonicalAgentsMd = `# AI Agent Instructions\n\n`;
   canonicalAgentsMd += `${architectureSection}\n\n`;
   canonicalAgentsMd += `${safetySection}\n\n`;
   canonicalAgentsMd += `${verificationSection}\n\n`;
@@ -68,9 +68,9 @@ ${subprojectRows}
     canonicalAgentsMd += `## 📋 Existing Repository Directives\n${existingContent}\n`;
   }
 
-  summaryChanges.push('Added explicit Safety Boundaries section (protects live keys and destructive scripts)');
-  summaryChanges.push('Documented discovered test & build commands across all 4 subprojects');
-  summaryChanges.push('Added Architecture map clarifying subprojects location');
+  summaryChanges.push('Adds explicit safety boundaries for secrets and destructive operations');
+  summaryChanges.push(`Documents test and build commands for ${subprojects.length} discovered subproject${subprojects.length === 1 ? '' : 's'}`);
+  summaryChanges.push('Adds an architecture map for the discovered projects');
 
   // 5. Build agent-ready.json
   const agentReadyConfig = {
@@ -98,7 +98,7 @@ ${subprojectRows}
   };
 
   const agentReadyJsonContent = JSON.stringify(agentReadyConfig, null, 2);
-  summaryChanges.push('Generated agent-ready.json configuration for third-party scanners');
+  summaryChanges.push('Generates agent-ready.json for compatible third-party scanners');
 
   return {
     agentsMdContent: canonicalAgentsMd,

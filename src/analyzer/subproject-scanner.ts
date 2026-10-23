@@ -1,6 +1,12 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { execFileSync } from 'node:child_process';
 import { SubprojectInfo } from '../types/index.js';
+
+const IGNORED_DIRECTORIES = new Set([
+  '.git', '.cache', '.idea', '.next', '.turbo', '.venv', 'build', 'coverage',
+  'dist', 'node_modules', 'target', 'tmp', '.tmp', 'vendor'
+]);
 
 /**
  * Discovers all subprojects and submodules in a repository.
@@ -22,64 +28,70 @@ export function discoverSubprojects(repoPath: string): SubprojectInfo[] {
     }
   }
 
-  // 2. Discover root entries and subdirectories (depth 1 to 2)
-  const entries = fs.readdirSync(repoPath, { withFileTypes: true });
-
-  for (const entry of entries) {
-    if (!entry.isDirectory()) continue;
-    if (['.git', 'node_modules', '.cache', 'dist', 'build', '.idea'].includes(entry.name)) continue;
-
-    const relPath = entry.name;
-    const absPath = path.join(repoPath, relPath);
+  const seen = new Set<string>();
+  const inspect = (absPath: string, relPath: string): void => {
+    if (seen.has(relPath)) return;
+    const name = relPath === '.' ? path.basename(repoPath) : path.basename(relPath);
     const isSubmodule = submoduleNames.has(relPath);
+    const packagePath = path.join(absPath, 'package.json');
 
-    // Check for package.json
-    const pkgPath = path.join(absPath, 'package.json');
-    if (fs.existsSync(pkgPath)) {
+    if (fs.existsSync(packagePath)) {
       try {
-        const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf-8'));
+        const pkg = JSON.parse(fs.readFileSync(packagePath, 'utf-8'));
         subprojects.push({
-          name: pkg.name || entry.name,
+          name: pkg.name || name,
           relPath,
           absPath,
           kind: 'node',
           isSubmodule,
-          testScript: pkg.scripts?.test,
-          buildScript: pkg.scripts?.build,
-          lintScript: pkg.scripts?.lint
+          testScript: pkg.scripts?.test ? 'npm run test' : undefined,
+          buildScript: pkg.scripts?.build ? 'npm run build' : undefined,
+          lintScript: pkg.scripts?.lint ? 'npm run lint' : undefined
         });
-        continue;
+        seen.add(relPath);
+        return;
       } catch {
-        // fallback
+        // Continue with other manifest types.
       }
     }
 
-    // Check for pubspec.yaml (Flutter / Dart)
-    const pubspecPath = path.join(absPath, 'pubspec.yaml');
-    if (fs.existsSync(pubspecPath)) {
-      subprojects.push({
-        name: entry.name,
-        relPath,
-        absPath,
-        kind: 'flutter',
-        isSubmodule,
-        testScript: 'flutter test',
-        buildScript: 'flutter build'
-      });
-      continue;
+    const knownManifests: Array<[string, SubprojectInfo['kind'], string | undefined, string | undefined]> = [
+      ['pubspec.yaml', 'flutter', 'flutter test', 'flutter build'],
+      ['pyproject.toml', 'python', 'pytest', undefined],
+      ['Cargo.toml', 'rust', 'cargo test', 'cargo build'],
+      ['go.mod', 'go', 'go test ./...', 'go build ./...']
+    ];
+    for (const [manifest, kind, testScript, buildScript] of knownManifests) {
+      if (fs.existsSync(path.join(absPath, manifest))) {
+        subprojects.push({ name, relPath, absPath, kind, isSubmodule, testScript, buildScript });
+        seen.add(relPath);
+        return;
+      }
     }
 
-    // If it's a known submodule without explicit config found yet
     if (isSubmodule) {
-      subprojects.push({
-        name: entry.name,
-        relPath,
-        absPath,
-        kind: 'unknown',
-        isSubmodule
-      });
+      subprojects.push({ name, relPath, absPath, kind: 'unknown', isSubmodule });
+      seen.add(relPath);
     }
-  }
+  };
+
+  const walk = (currentPath: string, relPath: string, depth: number): void => {
+    inspect(currentPath, relPath);
+    if (depth >= 3) return;
+    let entries: fs.Dirent[];
+    try {
+      entries = fs.readdirSync(currentPath, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
+      if (!entry.isDirectory() || entry.isSymbolicLink() || IGNORED_DIRECTORIES.has(entry.name)) continue;
+      const nextRelPath = relPath === '.' ? entry.name : path.join(relPath, entry.name);
+      walk(path.join(currentPath, entry.name), nextRelPath, depth + 1);
+    }
+  };
+
+  walk(repoPath, '.', 0);
 
   return subprojects;
 }
@@ -91,28 +103,66 @@ export function discoverSubprojects(repoPath: string): SubprojectInfo[] {
 export function buildFileIndex(repoPath: string, subprojects: SubprojectInfo[]): Set<string> {
   const fileSet = new Set<string>();
 
-  function walk(currentDir: string, relBase = '') {
-    if (!fs.existsSync(currentDir)) return;
-    const entries = fs.readdirSync(currentDir, { withFileTypes: true });
-
-    for (const entry of entries) {
-      if (['.git', 'node_modules', '.cache', 'dist', 'build', '.tmp', 'tmp'].includes(entry.name)) continue;
-
-      const relPath = relBase ? `${relBase}/${entry.name}` : entry.name;
-      const fullPath = path.join(currentDir, entry.name);
-
-      if (entry.isDirectory()) {
-        fileSet.add(relPath);
-        fileSet.add(`${relPath}/`);
-        walk(fullPath, relPath);
-      } else {
-        fileSet.add(relPath);
+  let files: string[] = [];
+  try {
+    files = execFileSync('git', ['-C', repoPath, 'ls-files', '--cached', '--others', '--exclude-standard'], {
+      encoding: 'utf-8',
+      stdio: ['ignore', 'pipe', 'pipe']
+    }).split('\n').filter(Boolean);
+  } catch {
+    // A non-Git directory can still be inspected, but only within conservative bounds.
+    const walk = (currentDir: string, relative = '', depth = 0): void => {
+      if (depth > 8) return;
+      let entries: fs.Dirent[];
+      try {
+        entries = fs.readdirSync(currentDir, { withFileTypes: true });
+      } catch {
+        return;
       }
+      for (const entry of entries) {
+        if (IGNORED_DIRECTORIES.has(entry.name) || entry.isSymbolicLink()) continue;
+        const next = relative ? `${relative}/${entry.name}` : entry.name;
+        if (entry.isDirectory()) walk(path.join(currentDir, entry.name), next, depth + 1);
+        else files.push(next);
+      }
+    };
+    walk(repoPath);
+  }
+
+  for (const file of files) {
+    fileSet.add(file);
+    const segments = file.split('/');
+    for (let index = 1; index < segments.length; index++) {
+      const directory = segments.slice(0, index).join('/');
+      fileSet.add(directory);
+      fileSet.add(`${directory}/`);
     }
   }
 
-  // Walk root
-  walk(repoPath);
-
   return fileSet;
+}
+
+/**
+ * Builds a conservative schema index from tracked SQL migrations. A table is
+ * recognized only when it is explicitly declared in a migration file.
+ */
+export function discoverKnownTables(repoPath: string, fileSet: Set<string>): Set<string> {
+  const tables = new Set<string>();
+  for (const file of fileSet) {
+    if (!file.endsWith('.sql') || file.endsWith('/')) continue;
+    const absolutePath = path.join(repoPath, file);
+    let content: string;
+    try {
+      const stat = fs.statSync(absolutePath);
+      if (stat.size > 1_000_000) continue;
+      content = fs.readFileSync(absolutePath, 'utf-8');
+    } catch {
+      continue;
+    }
+    const matches = content.matchAll(/\b(?:create|alter)\s+table\s+(?:if\s+not\s+exists\s+)?(?:["`]?public["`]?\.)?["`]?([a-zA-Z_][a-zA-Z0-9_]*)["`]?/gi);
+    for (const match of matches) {
+      if (match[1]) tables.add(match[1].toLowerCase());
+    }
+  }
+  return tables;
 }

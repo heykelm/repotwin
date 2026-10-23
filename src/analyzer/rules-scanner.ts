@@ -40,7 +40,8 @@ function parseRuleFrontmatter(file: string, content: string): RuleMeta {
   const yamlBlock = content.substring(3, endIdx);
   const lines = yamlBlock.split('\n');
 
-  for (const line of lines) {
+  for (let index = 0; index < lines.length; index++) {
+    const line = lines[index] ?? '';
     const [key, ...valParts] = line.split(':');
     if (!key || valParts.length === 0) continue;
 
@@ -48,13 +49,39 @@ function parseRuleFrontmatter(file: string, content: string): RuleMeta {
     const v = valParts.join(':').trim();
 
     if (k === 'globs') {
-      meta.globs = v.split(',').map(g => g.trim()).filter(Boolean);
+      if (v) {
+        meta.globs = parseGlobValue(v);
+      } else {
+        const globs: string[] = [];
+        while (index + 1 < lines.length && /^\s*-\s+/.test(lines[index + 1] ?? '')) {
+          index++;
+          globs.push(unquote((lines[index] ?? '').replace(/^\s*-\s+/, '').trim()));
+        }
+        meta.globs = globs;
+      }
     } else if (k === 'alwaysApply') {
-      meta.alwaysApply = v === 'true';
+      meta.alwaysApply = v.replace(/\s+#.*$/, '') === 'true';
     } else if (k === 'description') {
-      meta.description = v;
+      meta.description = unquote(v);
     }
   }
 
   return meta;
+}
+
+function parseGlobValue(value: string): string[] {
+  const normalized = value.trim();
+  if (normalized.startsWith('[') && normalized.endsWith(']')) {
+    try {
+      const parsed = JSON.parse(normalized);
+      if (Array.isArray(parsed) && parsed.every(item => typeof item === 'string')) return parsed;
+    } catch {
+      // Fall back to a comma-separated list below.
+    }
+  }
+  return normalized.split(',').map(glob => unquote(glob.trim())).filter(Boolean);
+}
+
+function unquote(value: string): string {
+  return value.replace(/^['"]|['"]$/g, '');
 }

@@ -9,8 +9,17 @@
   "scripts": {
     "build": "tsc",
     "dev": "tsx src/index.ts",
-    "test": "vitest run",
-    "test:watch": "vitest"
+    "test": "vitest run --no-cache",
+    "test:watch": "vitest",
+    "prepack": "npm run build"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=22.0.0"
   },
   "keywords": [
     "ai-agents",
