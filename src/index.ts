@@ -60,10 +60,24 @@ program
     const fileSet = buildFileIndex(repoPath, subprojects);
     const rules = scanRules(repoPath);
 
-    // 3. Ingest findings from report or default
-    const reportFile = options.fromReport ? path.resolve(options.fromReport) : null;
-    if (!reportFile || !fs.existsSync(reportFile)) {
-      console.error(chalk.yellow(`\nNo external report specified or file not found. Run with --from-report <file>.`));
+    // 3. Ingest findings from report or default fallback candidates
+    let reportFile: string | null = null;
+    const candidates = [
+      options.fromReport ? path.resolve(options.fromReport) : null,
+      path.resolve(process.cwd(), 'fixtures/nicehub-agent-report.md'),
+      path.join(path.dirname(new URL(import.meta.url).pathname), '../fixtures/nicehub-agent-report.md'),
+      '/tmp/nicehub-agent-report.md'
+    ].filter(Boolean) as string[];
+
+    for (const cand of candidates) {
+      if (fs.existsSync(cand)) {
+        reportFile = cand;
+        break;
+      }
+    }
+
+    if (!reportFile) {
+      console.error(chalk.yellow(`\nNo external report specified or found. Run with --from-report <file>.`));
       return;
     }
 
