@@ -1,0 +1,37 @@
+{
+  "name": "repotwin",
+  "version": "0.1.0",
+  "description": "Experimental optimization and diagnostic platform for Git repositories and AI coding agents",
+  "type": "module",
+  "bin": {
+    "repotwin": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx src/index.ts",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "keywords": [
+    "ai-agents",
+    "git",
+    "repository-optimization",
+    "claude-code",
+    "cursor",
+    "benchmark"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "chalk": "^5.3.0",
+    "commander": "^12.1.0",
+    "simple-git": "^3.27.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "^22.8.1",
+    "tsx": "^4.19.1",
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.3"
+  }
+}
