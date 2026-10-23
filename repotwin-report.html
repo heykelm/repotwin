@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html lang="fr" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RepoTwin Audit — nicehub-platform</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Plus Jakarta Sans', sans-serif; }
+    code, pre { font-family: 'JetBrains Mono', monospace; }
+  </style>
+</head>
+<body class="bg-gray-950 text-gray-100 min-h-screen py-10 px-4 sm:px-6 lg:px-8 antialiased selection:bg-indigo-500 selection:text-white">
+
+  <div class="max-w-5xl mx-auto space-y-8">
+    
+    <!-- Top Header -->
+    <header class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-6 border-b border-gray-800/80">
+      <div>
+        <div class="flex items-center gap-3">
+          <div class="h-9 w-9 rounded-xl bg-gradient-to-tr from-indigo-500 to-purple-500 flex items-center justify-center font-bold text-white shadow-lg shadow-indigo-500/20">
+            RT
+          </div>
+          <div>
+            <h1 class="text-2xl font-bold text-white tracking-tight flex items-center gap-2">
+              RepoTwin <span class="text-xs font-mono font-normal px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">v0.1.0</span>
+            </h1>
+            <p class="text-xs text-gray-400">Rapport d'Audit d'Efficacité pour Agents IA</p>
+          </div>
+        </div>
+      </div>
+      <div class="flex items-center gap-2 font-mono text-xs text-gray-400 bg-gray-900 px-3 py-1.5 rounded-lg border border-gray-800">
+        <span class="text-gray-500">Cible:</span>
+        <span class="text-white font-medium truncate max-w-xs">/Users/hmannai/Downloads/nicehub-platform</span>
+      </div>
+    </header>
+
+    <!-- Score Hero Cards -->
+    <section class="grid grid-cols-1 md:grid-cols-3 gap-4">
+      
+      <!-- Card 1: Raw Score -->
+      <div class="bg-gray-900/60 border border-red-950/60 p-6 rounded-2xl relative overflow-hidden backdrop-blur">
+        <div class="absolute -right-4 -bottom-4 w-24 h-24 bg-red-500/10 rounded-full blur-2xl"></div>
+        <div class="text-xs font-semibold uppercase tracking-wider text-red-400 mb-1">Score Brut (Scanner Externe)</div>
+        <div class="flex items-baseline gap-2 mt-2">
+          <span class="text-5xl font-extrabold text-red-400 tracking-tight">0</span>
+          <span class="text-gray-500 text-sm">/ 100</span>
+          <span class="px-2 py-0.5 text-xs rounded bg-red-500/10 text-red-400 border border-red-500/20 font-bold ml-auto">F</span>
+        </div>
+        <p class="text-xs text-gray-400 mt-4 leading-relaxed">
+          Pénalisé à tort par 21 fausses alertes dues à l'incompréhension des sous-projets.
+        </p>
+      </div>
+
+      <!-- Card 2: Real Corrected Score -->
+      <div class="bg-gray-900/60 border border-amber-950/60 p-6 rounded-2xl relative overflow-hidden backdrop-blur">
+        <div class="absolute -right-4 -bottom-4 w-24 h-24 bg-amber-500/10 rounded-full blur-2xl"></div>
+        <div class="text-xs font-semibold uppercase tracking-wider text-amber-400 mb-1">Score Réel RepoTwin</div>
+        <div class="flex items-baseline gap-2 mt-2">
+          <span class="text-5xl font-extrabold text-amber-400 tracking-tight">70</span>
+          <span class="text-gray-500 text-sm">/ 100</span>
+          <span class="px-2 py-0.5 text-xs rounded bg-amber-500/10 text-amber-400 border border-amber-500/20 font-bold ml-auto">C</span>
+        </div>
+        <p class="text-xs text-emerald-400 mt-4 leading-relaxed flex items-center gap-1.5 font-medium">
+          <span>✓</span> +105 pts restaurés après filtrage chirurgical
+        </p>
+      </div>
+
+      <!-- Card 3: Projected Post-Twin -->
+      <div class="bg-gradient-to-b from-indigo-950/40 to-gray-900/60 border border-emerald-500/30 p-6 rounded-2xl relative overflow-hidden backdrop-blur shadow-xl shadow-emerald-950/20">
+        <div class="absolute -right-4 -bottom-4 w-24 h-24 bg-emerald-500/20 rounded-full blur-2xl"></div>
+        <div class="text-xs font-semibold uppercase tracking-wider text-emerald-400 mb-1">Potentiel Post-Twin</div>
+        <div class="flex items-baseline gap-2 mt-2">
+          <span class="text-5xl font-extrabold text-emerald-400 tracking-tight">96</span>
+          <span class="text-gray-500 text-sm">/ 100</span>
+          <span class="px-2 py-0.5 text-xs rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-bold ml-auto">A</span>
+        </div>
+        <p class="text-xs text-indigo-300 mt-4 leading-relaxed font-medium">
+          🚀 Atteignable immédiatement en appliquant le jumeau recommandé.
+        </p>
+      </div>
+
+    </section>
+
+    <!-- Subprojects Table -->
+    <section class="bg-gray-900/40 border border-gray-800/80 rounded-2xl p-6">
+      <h2 class="text-base font-bold text-white mb-4 flex items-center gap-2">
+        <span>📦</span> Cartographie des Sous-Projets Détectés (3)
+      </h2>
+      <div class="overflow-x-auto">
+        <table class="w-full text-left">
+          <thead>
+            <tr class="text-xs uppercase text-gray-500 border-b border-gray-800">
+              <th class="py-2.5 px-4">Projet</th>
+              <th class="py-2.5 px-4">Langage</th>
+              <th class="py-2.5 px-4">Commande Test</th>
+              <th class="py-2.5 px-4">Nature</th>
+            </tr>
+          </thead>
+          <tbody>
+            
+    <tr class="border-b border-gray-800 hover:bg-gray-800/40 transition">
+      <td class="py-3 px-4 font-semibold text-white flex items-center gap-2">
+        <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
+        nicehub-backend <span class="text-xs text-gray-500 font-mono">(backend/)</span>
+      </td>
+      <td class="py-3 px-4 text-gray-400 font-mono text-sm">node</td>
+      <td class="py-3 px-4 text-emerald-400 font-mono text-xs">NODE_OPTIONS="--experimental-vm-modules --no-warnings" jest</td>
+      <td class="py-3 px-4 text-gray-400 text-xs">Git Submodule</td>
+    </tr>
+  
+    <tr class="border-b border-gray-800 hover:bg-gray-800/40 transition">
+      <td class="py-3 px-4 font-semibold text-white flex items-center gap-2">
+        <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
+        flutter <span class="text-xs text-gray-500 font-mono">(flutter/)</span>
+      </td>
+      <td class="py-3 px-4 text-gray-400 font-mono text-sm">flutter</td>
+      <td class="py-3 px-4 text-emerald-400 font-mono text-xs">flutter test</td>
+      <td class="py-3 px-4 text-gray-400 text-xs">Git Submodule</td>
+    </tr>
+  
+    <tr class="border-b border-gray-800 hover:bg-gray-800/40 transition">
+      <td class="py-3 px-4 font-semibold text-white flex items-center gap-2">
+        <span class="w-2 h-2 rounded-full bg-amber-400"></span>
+        nicehub-frontend <span class="text-xs text-gray-500 font-mono">(frontend/)</span>
+      </td>
+      <td class="py-3 px-4 text-gray-400 font-mono text-sm">node</td>
+      <td class="py-3 px-4 text-emerald-400 font-mono text-xs"><span class="text-gray-500">Aucun test</span></td>
+      <td class="py-3 px-4 text-gray-400 text-xs">Git Submodule</td>
+    </tr>
+  
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- False Positives Eliminated -->
+    <section class="bg-gray-900/40 border border-gray-800/80 rounded-2xl p-6">
+      <div class="flex items-center justify-between mb-4">
+        <h2 class="text-base font-bold text-white flex items-center gap-2">
+          <span>🛡️</span> Faux Positifs Éliminés par RepoTwin (21)
+        </h2>
+        <span class="text-xs text-emerald-400 font-mono font-medium">100% des chemins "manquants" résolus</span>
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-96 overflow-y-auto pr-1">
+        
+    <div class="p-3 bg-gray-900/60 border border-gray-800 rounded-lg flex items-start gap-3 text-sm">
+      <span class="px-2 py-0.5 rounded text-xs font-mono font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+        SQL_DATABASE_ENTITY
+      </span>
+      <div class="flex-1 min-w-0">
+        <div class="font-mono text-white text-xs font-medium truncate">rides.price</div>
+        <div class="text-gray-400 text-xs mt-0.5">Database schema reference (rides.price) mistakenly flagged as a missing file path.</div>
+      </div>
+    </div>
+  
+    <div class="p-3 bg-gray-900/60 border border-gray-800 rounded-lg flex items-start gap-3 text-sm">
+      <span class="px-2 py-0.5 rounded text-xs font-mono font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+        EXISTS_RULE_SCOPE
+      </span>
+      <div class="flex-1 min-w-0">
+        <div class="font-mono text-white text-xs font-medium truncate">src/middleware/auth.js</div>
+        <div class="text-gray-400 text-xs mt-0.5">File exists at "backend/src/middleware/auth.js", correctly scoped by rule glob "backend/src/**/*".</div>
+      </div>
+    </div>
+  
+    <div class="p-3 bg-gray-900/60 border border-gray-800 rounded-lg flex items-start gap-3 text-sm">
+      <span class="px-2 py-0.5 rounded text-xs font-mono font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+        EXISTS_RULE_SCOPE
+      </span>
+      <div class="flex-1 min-w-0">
+        <div class="font-mono text-white text-xs font-medium truncate">src/routes/</div>
+        <div class="text-gray-400 text-xs mt-0.5">File exists at "backend/src/routes/", correctly scoped by rule glob "backend/src/**/*".</div>
+      </div>
+    </div>
+  
+    <div class="p-3 bg-gray-900/60 border border-gray-800 rounded-lg flex items-start gap-3 text-sm">
+      <span class="px-2 py-0.5 rounded text-xs font-mono font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+        EXISTS_RULE_SCOPE
+      </span>
+      <div class="flex-1 min-w-0">
+        <div class="font-mono text-white text-xs font-medium truncate">src/services/</div>
+        <div class="text-gray-400 text-xs mt-0.5">File exists at "backend/src/services/", correctly scoped by rule glob "backend/src/**/*".</div>
+      </div>
+    </div>
+  
+    <div class="p-3 bg-gray-900/60 border border-gray-800 rounded-lg flex items-start gap-3 text-sm">
+      <span class="px-2 py-0.5 rounded text-xs font-mono font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+        EXISTS_RULE_SCOPE
+      </span>
+      <div class="flex-1 min-w-0">
+        <div class="font-mono text-white text-xs font-medium truncate">src/services/payment.js</div>
+        <div class="text-gray-400 text-xs mt-0.5">File exists at "backend/src/services/payment.js", correctly scoped by rule glob "backend/src/**/*".</div>
+      </div>
+    </div>
+  
+    <div class="p-3 bg-gray-900/60 border border-gray-800 rounded-lg flex items-start gap-3 text-sm">
+      <span class="px-2 py-0.5 rounded text-xs font-mono font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+        EXISTS_RULE_SCOPE
+      </span>
+      <div class="flex-1 min-w-0">
+        <div class="font-mono text-white text-xs font-medium truncate">src/services/b2b-providers.service.js</div>
+        <div class="text-gray-400 text-xs mt-0.5">File exists at "backend/src/services/b2b-providers.service.js", correctly scoped by rule glob "backend/src/**/*".</div>
+      </div>
+    </div>
+  
+    <div class="p-3 bg-gray-900/60 border border-gray-800 rounded-lg flex items-start gap-3 text-sm">
+      <span class="px-2 py-0.5 rounded text-xs font-mono font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+        SQL_DATABASE_ENTITY
+      </span>
+      <div class="flex-1 min-w-0">
+        <div class="font-mono text-white text-xs font-medium truncate">rides.price</div>
+        <div class="text-gray-400 text-xs mt-0.5">Database schema reference (rides.price) mistakenly flagged as a missing file path.</div>
+      </div>
+    </div>
+  
+    <div class="p-3 bg-gray-900/60 border border-gray-800 rounded-lg flex items-start gap-3 text-sm">
+      <span class="px-2 py-0.5 rounded text-xs font-mono font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+        SQL_DATABASE_ENTITY
+      </span>
+      <div class="flex-1 min-w-0">
+        <div class="font-mono text-white text-xs font-medium truncate">rides.datetime</div>
+        <div class="text-gray-400 text-xs mt-0.5">Database schema reference (rides.datetime) mistakenly flagged as a missing file path.</div>
+      </div>
+    </div>
+  
+    <div class="p-3 bg-gray-900/60 border border-gray-800 rounded-lg flex items-start gap-3 text-sm">
+      <span class="px-2 py-0.5 rounded text-xs font-mono font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+        EXISTS_SINGLE_MATCH
+      </span>
+      <div class="flex-1 min-w-0">
+        <div class="font-mono text-white text-xs font-medium truncate">073_b2b_providers_v1.sql</div>
+        <div class="text-gray-400 text-xs mt-0.5">File exists at "backend/migrations/073_b2b_providers_v1.sql" (referenced without full directory path).</div>
+      </div>
+    </div>
+  
+    <div class="p-3 bg-gray-900/60 border border-gray-800 rounded-lg flex items-start gap-3 text-sm">
+      <span class="px-2 py-0.5 rounded text-xs font-mono font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+        EXISTS_SINGLE_MATCH
+      </span>
+      <div class="flex-1 min-w-0">
+        <div class="font-mono text-white text-xs font-medium truncate">backfill-b2b-koi-rides.js</div>
+        <div class="text-gray-400 text-xs mt-0.5">File exists at "backend/scripts/backfill-b2b-koi-rides.js" (referenced without full directory path).</div>
+      </div>
+    </div>
+  
+    <div class="p-3 bg-gray-900/60 border border-gray-800 rounded-lg flex items-start gap-3 text-sm">
+      <span class="px-2 py-0.5 rounded text-xs font-mono font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+        EXISTS_SINGLE_MATCH
+      </span>
+      <div class="flex-1 min-w-0">
+        <div class="font-mono text-white text-xs font-medium truncate">mark-b2b-provider-paid.js</div>
+        <div class="text-gray-400 text-xs mt-0.5">File exists at "backend/scripts/mark-b2b-provider-paid.js" (referenced without full directory path).</div>
+      </div>
+    </div>
+  
+    <div class="p-3 bg-gray-900/60 border border-gray-800 rounded-lg flex items-start gap-3 text-sm">
+      <span class="px-2 py-0.5 rounded text-xs font-mono font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+        EXISTS_SINGLE_MATCH
+      </span>
+      <div class="flex-1 min-w-0">
+        <div class="font-mono text-white text-xs font-medium truncate">fix-koi-prices-and-commissions.js</div>
+        <div class="text-gray-400 text-xs mt-0.5">File exists at "backend/scripts/fix-koi-prices-and-commissions.js" (referenced without full directory path).</div>
+      </div>
+    </div>
+  
+    <div class="p-3 bg-gray-900/60 border border-gray-800 rounded-lg flex items-start gap-3 text-sm">
+      <span class="px-2 py-0.5 rounded text-xs font-mono font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+        EXISTS_RULE_SCOPE
+      </span>
+      <div class="flex-1 min-w-0">
+        <div class="font-mono text-white text-xs font-medium truncate">.env</div>
+        <div class="text-gray-400 text-xs mt-0.5">File exists at "backend/.env", correctly scoped by rule glob "backend/migrations/**".</div>
+      </div>
+    </div>
+  
+    <div class="p-3 bg-gray-900/60 border border-gray-800 rounded-lg flex items-start gap-3 text-sm">
+      <span class="px-2 py-0.5 rounded text-xs font-mono font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+        EXISTS_RULE_SCOPE
+      </span>
+      <div class="flex-1 min-w-0">
+        <div class="font-mono text-white text-xs font-medium truncate">lib/translations.ts</div>
+        <div class="text-gray-400 text-xs mt-0.5">File exists at "frontend/lib/translations.ts", correctly scoped by rule glob "frontend/app/admin/**".</div>
+      </div>
+    </div>
+  
+    <div class="p-3 bg-gray-900/60 border border-gray-800 rounded-lg flex items-start gap-3 text-sm">
+      <span class="px-2 py-0.5 rounded text-xs font-mono font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+        PATTERN_OR_I18N
+      </span>
+      <div class="flex-1 min-w-0">
+        <div class="font-mono text-white text-xs font-medium truncate">t.admin.*</div>
+        <div class="text-gray-400 text-xs mt-0.5">Pattern / wildcard key reference (t.admin.*), not a file path.</div>
+      </div>
+    </div>
+  
+    <div class="p-3 bg-gray-900/60 border border-gray-800 rounded-lg flex items-start gap-3 text-sm">
+      <span class="px-2 py-0.5 rounded text-xs font-mono font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+        PATH_ALIAS
+      </span>
+      <div class="flex-1 min-w-0">
+        <div class="font-mono text-white text-xs font-medium truncate">@/components/entity</div>
+        <div class="text-gray-400 text-xs mt-0.5">TypeScript alias resolved to "frontend/components/entity".</div>
+      </div>
+    </div>
+  
+    <div class="p-3 bg-gray-900/60 border border-gray-800 rounded-lg flex items-start gap-3 text-sm">
+      <span class="px-2 py-0.5 rounded text-xs font-mono font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+        EXISTS_RULE_SCOPE
+      </span>
+      <div class="flex-1 min-w-0">
+        <div class="font-mono text-white text-xs font-medium truncate">app/admin/providers/</div>
+        <div class="text-gray-400 text-xs mt-0.5">File exists at "frontend/app/admin/providers/", correctly scoped by rule glob "frontend/app/admin/**".</div>
+      </div>
+    </div>
+  
+    <div class="p-3 bg-gray-900/60 border border-gray-800 rounded-lg flex items-start gap-3 text-sm">
+      <span class="px-2 py-0.5 rounded text-xs font-mono font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+        SQL_DATABASE_ENTITY
+      </span>
+      <div class="flex-1 min-w-0">
+        <div class="font-mono text-white text-xs font-medium truncate">rides.price</div>
+        <div class="text-gray-400 text-xs mt-0.5">Database schema reference (rides.price) mistakenly flagged as a missing file path.</div>
+      </div>
+    </div>
+  
+    <div class="p-3 bg-gray-900/60 border border-gray-800 rounded-lg flex items-start gap-3 text-sm">
+      <span class="px-2 py-0.5 rounded text-xs font-mono font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+        EXISTS_RULE_SCOPE
+      </span>
+      <div class="flex-1 min-w-0">
+        <div class="font-mono text-white text-xs font-medium truncate">lib/date-utils.ts</div>
+        <div class="text-gray-400 text-xs mt-0.5">File exists at "frontend/lib/date-utils.ts", correctly scoped by rule glob "frontend/app/admin/**".</div>
+      </div>
+    </div>
+  
+    <div class="p-3 bg-gray-900/60 border border-gray-800 rounded-lg flex items-start gap-3 text-sm">
+      <span class="px-2 py-0.5 rounded text-xs font-mono font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+        EXISTS_RULE_SCOPE
+      </span>
+      <div class="flex-1 min-w-0">
+        <div class="font-mono text-white text-xs font-medium truncate">components/driver/AppAgenda.tsx</div>
+        <div class="text-gray-400 text-xs mt-0.5">File exists at "frontend/components/driver/AppAgenda.tsx", correctly scoped by rule glob "frontend/app/driver/**".</div>
+      </div>
+    </div>
+  
+    <div class="p-3 bg-gray-900/60 border border-gray-800 rounded-lg flex items-start gap-3 text-sm">
+      <span class="px-2 py-0.5 rounded text-xs font-mono font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+        EXISTS_RULE_SCOPE
+      </span>
+      <div class="flex-1 min-w-0">
+        <div class="font-mono text-white text-xs font-medium truncate">lib/api.ts</div>
+        <div class="text-gray-400 text-xs mt-0.5">File exists at "frontend/lib/api.ts", correctly scoped by rule glob "frontend/app/driver/**".</div>
+      </div>
+    </div>
+  
+      </div>
+    </section>
+
+    <!-- Action Plan & Diff -->
+    <section class="bg-gray-900/40 border border-indigo-500/30 rounded-2xl p-6 relative overflow-hidden">
+      <div class="flex items-center justify-between mb-4">
+        <h2 class="text-base font-bold text-white flex items-center gap-2">
+          <span>💡</span> Amélioration Recommandée : Le Nouveau AGENTS.md
+        </h2>
+        <span class="px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+          Prêt à appliquer (+96 pts)
+        </span>
+      </div>
+      <ul class="space-y-1.5 mb-6 text-xs text-gray-300">
+        <li class="flex items-center gap-2"><span class="text-indigo-400">✦</span> Added explicit Safety Boundaries section (protects live keys and destructive scripts)</li><li class="flex items-center gap-2"><span class="text-indigo-400">✦</span> Documented discovered test & build commands across all 4 subprojects</li><li class="flex items-center gap-2"><span class="text-indigo-400">✦</span> Added Architecture map clarifying subprojects location</li><li class="flex items-center gap-2"><span class="text-indigo-400">✦</span> Generated agent-ready.json configuration for third-party scanners</li>
+      </ul>
+
+      <div class="bg-gray-950 rounded-xl p-4 border border-gray-800">
+        <pre class="text-xs text-gray-300 font-mono overflow-x-auto max-h-72"><code># NiceHub Platform — Canonical AI Agent Instructions
+
+## 🗺️ Project Architecture &amp; Rules Centralization
+- **Multi-Project Structure :** This repository contains multiple focused subprojects. Do not look for root configurations. Always navigate into the relevant subproject directory.
+- **Cursor Rules Pointer :** Specific domain rules in `.cursor/rules/*.mdc` defer to this document for safety and test commands.
+
+## 🔒 Safety Boundaries (Mandatory for AI Agents)
+- **Secrets &amp; Credentials :** NEVER commit, print, or log real secrets, private keys (`*.p8`, `*.pem`, `*.key`), or live API credentials (`.env.stripe.live`).
+- **Destructive Commands :** NEVER execute destructive database or driver scripts (e.g. `delete_driver*.js`, `clear_stripe_ids*.js`) without explicit user consent.
+- **Production Isolation :** Always verify that environment targets development or local mock before executing mutations.
+
+## 🧪 Verification &amp; Test Commands
+Always verify changes before marking a task complete:
+
+| Subproject | Type | Test Command | Build Command |
+| :--- | :--- | :--- | :--- |
+| **nicehub-backend** (`backend/`) | node | `cd backend &amp;&amp; NODE_OPTIONS=&quot;--experimental-vm-modules --no-warnings&quot; jest` | *(none configured)* |
+| **flutter** (`flutter/`) | flutter | `cd flutter &amp;&amp; flutter test` | `cd flutter &amp;&amp; flutter build` |
+| **nicehub-frontend** (`frontend/`) | node | *(none configured)* | `cd frontend &amp;&amp; next build` |
+
+## 📋 Existing Repository Directives
+# nicehub-platform — Instructions Agents
+## Supabase Migrations &amp; Permissions Data API (Post Octobre 2026)
+- **Grants Explicites Obligatoires :** Pour toute nouvelle table créée dans le schéma `public`, Supabase n&#039;accorde plus automatiquement les droits d&#039;accès à l&#039;API Data (PostgREST / supabase-js / Flutter).
+- **Règle dans chaque migration créant une table :** Toujours inclure explicitement les permissions appropriées :
+```sql
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.ma_table TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.ma_table TO service_role;
+-- Optionnel si accessible sans authentification (ex: vitrine) :
+-- GRANT SELECT ON TABLE public.ma_table TO anon;
+```
+</code></pre>
+      </div>
+
+      <div class="mt-6 flex flex-col sm:flex-row gap-3">
+        <div class="text-xs text-gray-400 flex items-center">
+          Pour appliquer ces modifications en 1 clic dans votre terminal :
+        </div>
+        <div class="bg-gray-950 px-3 py-1.5 rounded-lg border border-gray-800 text-xs font-mono text-emerald-400 font-bold ml-auto">
+          repotwin fix
+        </div>
+      </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="text-center text-xs text-gray-600 pt-6 border-t border-gray-900">
+      RepoTwin — Measure. Optimize. Prove. · Conçu pour les agents IA (Cursor, Claude Code, Codex, Gemini CLI)
+    </footer>
+
+  </div>
+
+</body>
+</html>

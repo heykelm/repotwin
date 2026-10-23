@@ -20,6 +20,15 @@ function gradeFromScore(score: number): string {
 }
 
 /**
+ * Renders an ASCII / Unicode progress bar for scores.
+ */
+export function renderProgressBar(score: number, total = 100, width = 12): string {
+  const filledCount = Math.round((Math.max(0, Math.min(score, total)) / total) * width);
+  const emptyCount = width - filledCount;
+  return `[${'█'.repeat(filledCount)}${'░'.repeat(emptyCount)}]`;
+}
+
+/**
  * Calculates raw, corrected (excluding false positives), and projected (post-twin) readiness scores.
  */
 export function calculateScores(
