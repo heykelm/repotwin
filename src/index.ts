@@ -7,6 +7,7 @@ import { parseAgentReport } from './analyzer/report-parser.js';
 import { discoverSubprojects, buildFileIndex } from './analyzer/subproject-scanner.js';
 import { scanRules } from './analyzer/rules-scanner.js';
 import { disambiguateFinding } from './diagnostics/disambiguator.js';
+import { calculateScores } from './diagnostics/score.js';
 import { ProcessedFinding } from './types/index.js';
 
 const program = new Command();
@@ -84,9 +85,12 @@ program
       fpByClassification.set(fp.classification, list);
     }
 
+    const scores = calculateScores(processed, 0);
+
     if (options.json) {
       console.log(JSON.stringify({
         repoPath,
+        scores,
         totalRawFindings: rawFindings.length,
         falsePositivesCount: falsePositives.length,
         trueIssuesCount: trueIssues.length,
@@ -100,12 +104,12 @@ program
 
     // Beautiful CLI summary
     console.log(chalk.bold.green('\n=================================================='));
-    console.log(chalk.bold.green('🎯 REPOTWIN DIAGNOSTIC RESULTS'));
+    console.log(chalk.bold.green('🎯 REPOTWIN READINESS SCORE COMPARISON'));
     console.log(chalk.bold.green('=================================================='));
 
-    console.log(`\nTotal Scanner Alerts Ingested : ${chalk.bold(rawFindings.length)}`);
-    console.log(`Discarded False Positives     : ${chalk.bold.green(falsePositives.length)} (${Math.round((falsePositives.length / rawFindings.length) * 100)}%)`);
-    console.log(`Genuine Actionable Issues     : ${chalk.bold.yellow(trueIssues.length)}`);
+    console.log(`  Raw Scanner Score  : ${chalk.red.bold(`${scores.rawScore}/100 (${scores.rawGrade})`)}   ${chalk.gray('↳ Distorted by phantom errors & unindexed submodules')}`);
+    console.log(`  RepoTwin Real Score: ${chalk.yellow.bold(`${scores.correctedScore}/100 (${scores.correctedGrade})`)}  ${chalk.green(`↳ Restored +${scores.falsePenaltyRestored} pts`)} after filtering false positives`);
+    console.log(`  Projected Twin Post: ${chalk.green.bold(`${scores.projectedScore}/100 (${scores.projectedGrade})`)}  ${chalk.cyan('↳ Target achievable via twin recipe')}`);
 
     console.log(chalk.bold.cyan('\n🛡️ False Positives Eliminated by Category:'));
     for (const [classification, items] of fpByClassification.entries()) {
