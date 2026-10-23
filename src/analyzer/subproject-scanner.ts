@@ -101,6 +101,11 @@ export function discoverSubprojects(repoPath: string): SubprojectInfo[] {
 
   walk(repoPath, '.', 0);
 
+  // If the repository uses Git submodules, only return the official declared submodules
+  if (submoduleNames.size > 0) {
+    return subprojects.filter(s => s.isSubmodule);
+  }
+
   return subprojects;
 }
 
@@ -113,10 +118,17 @@ export function buildFileIndex(repoPath: string, subprojects: SubprojectInfo[]):
 
   let files: string[] = [];
   try {
-    files = execFileSync('git', ['-C', repoPath, 'ls-files', '--cached', '--others', '--exclude-standard'], {
+    const trackedWithSubmodules = execFileSync('git', ['-C', repoPath, 'ls-files', '--cached', '--recurse-submodules'], {
       encoding: 'utf-8',
       stdio: ['ignore', 'pipe', 'pipe']
     }).split('\n').filter(Boolean);
+    files.push(...trackedWithSubmodules);
+
+    const untracked = execFileSync('git', ['-C', repoPath, 'ls-files', '--others', '--exclude-standard'], {
+      encoding: 'utf-8',
+      stdio: ['ignore', 'pipe', 'pipe']
+    }).split('\n').filter(Boolean);
+    files.push(...untracked);
   } catch {
     // A non-Git directory can still be inspected, but only within conservative bounds.
     const walk = (currentDir: string, relative = '', depth = 0): void => {
