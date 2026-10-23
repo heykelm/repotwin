@@ -5,7 +5,8 @@ import { SubprojectInfo } from '../types/index.js';
 
 const IGNORED_DIRECTORIES = new Set([
   '.git', '.cache', '.idea', '.next', '.turbo', '.venv', 'build', 'coverage',
-  'dist', 'node_modules', 'target', 'tmp', '.tmp', 'vendor'
+  'dist', 'node_modules', 'target', 'tmp', '.tmp', 'vendor',
+  'scratch', 'archive', 'output', 'outputs', 'fixtures', 'doc', 'docs'
 ]);
 
 /**
@@ -29,8 +30,8 @@ export function discoverSubprojects(repoPath: string): SubprojectInfo[] {
   }
 
   const seen = new Set<string>();
-  const inspect = (absPath: string, relPath: string): void => {
-    if (seen.has(relPath)) return;
+  const inspect = (absPath: string, relPath: string): boolean => {
+    if (seen.has(relPath)) return false;
     const name = relPath === '.' ? path.basename(repoPath) : path.basename(relPath);
     const isSubmodule = submoduleNames.has(relPath);
     const packagePath = path.join(absPath, 'package.json');
@@ -49,7 +50,7 @@ export function discoverSubprojects(repoPath: string): SubprojectInfo[] {
           lintScript: pkg.scripts?.lint ? 'npm run lint' : undefined
         });
         seen.add(relPath);
-        return;
+        return true;
       } catch {
         // Continue with other manifest types.
       }
@@ -65,19 +66,26 @@ export function discoverSubprojects(repoPath: string): SubprojectInfo[] {
       if (fs.existsSync(path.join(absPath, manifest))) {
         subprojects.push({ name, relPath, absPath, kind, isSubmodule, testScript, buildScript });
         seen.add(relPath);
-        return;
+        return true;
       }
     }
 
     if (isSubmodule) {
       subprojects.push({ name, relPath, absPath, kind: 'unknown', isSubmodule });
       seen.add(relPath);
+      return true;
     }
+
+    return false;
   };
 
   const walk = (currentPath: string, relPath: string, depth: number): void => {
-    inspect(currentPath, relPath);
-    if (depth >= 3) return;
+    const isSubproject = inspect(currentPath, relPath);
+    
+    // Stop recursing if depth >= 2 or if we already identified this folder as a subproject/submodule (boundary)
+    if (depth >= 2) return;
+    if (relPath !== '.' && isSubproject) return;
+
     let entries: fs.Dirent[];
     try {
       entries = fs.readdirSync(currentPath, { withFileTypes: true });
