@@ -128,11 +128,15 @@ export async function runValidationCommand(
     let outputTruncated = false;
     let timedOut = false;
     let settled = false;
-    const child = spawn(command.executable, command.args, {
+    const isWin = process.platform === 'win32';
+    const executable = isWin && ['npm', 'pnpm', 'yarn', 'npx'].includes(command.executable)
+      ? `${command.executable}.cmd`
+      : command.executable;
+    const child = spawn(executable, command.args, {
       cwd,
       env: executionEnvironment(),
       shell: false,
-      detached: process.platform !== 'win32',
+      detached: !isWin,
       stdio: ['ignore', 'pipe', 'pipe']
     });
 
