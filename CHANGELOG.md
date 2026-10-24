@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.4
+
+- Add concrete gains to application reports, comparing applied files with their backups and separating observed changes from expected benefits.
+- Show the gain details in English and French, with recorded command results as evidence where available.
+
 ## 0.1.3
 
 - Disable Git hooks during candidate creation and submodule operations.

@@ -5,6 +5,13 @@ import crypto from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { ensureSafeDirectory, prepareReportStorage, assertSafeReportFile, writeReportAtomically } from './safe-storage.js';
 
+export interface ApplicationGain {
+  title: { en: string; fr: string };
+  change: { en: string; fr: string };
+  benefit: { en: string; fr: string };
+  evidence: { en: string; fr: string };
+}
+
 export interface ApplicationSnapshot {
   id: string;
   appliedAt: string;
@@ -52,6 +59,61 @@ export interface ApplicationSnapshot {
   };
   filesApplied: string[];
   diff: string;
+  gains?: ApplicationGain[];
+}
+
+function readRegularText(filePath: string): string | null {
+  try {
+    return fs.lstatSync(filePath).isFile() ? fs.readFileSync(filePath, 'utf-8') : null;
+  } catch {
+    return null;
+  }
+}
+
+export function collectApplicationGains(snapshot: ApplicationSnapshot): ApplicationGain[] {
+  const originalAgents = readRegularText(path.join(snapshot.backupDir, 'AGENTS.md')) ?? '';
+  const appliedAgents = snapshot.filesApplied.includes('AGENTS.md')
+    ? readRegularText(path.join(snapshot.repoPath, 'AGENTS.md')) ?? '' : originalAgents;
+  const originalConfig = readRegularText(path.join(snapshot.backupDir, 'agent-ready.json'));
+  const appliedConfig = snapshot.filesApplied.includes('agent-ready.json')
+    ? readRegularText(path.join(snapshot.repoPath, 'agent-ready.json')) : originalConfig;
+  const gains: ApplicationGain[] = [];
+  const added = (fragment: string) => !originalAgents.includes(fragment) && appliedAgents.includes(fragment);
+
+  if (added('## 🔒 Safety Boundaries')) gains.push({
+    title: { en: 'Safer agent instructions', fr: 'Consignes de sécurité explicites' },
+    change: { en: 'Secret handling, destructive commands and production isolation are now documented.', fr: 'La gestion des secrets, les commandes destructives et l’isolement de la production sont désormais documentés.' },
+    benefit: { en: 'Expected benefit: agents have clear limits before acting on this repository.', fr: 'Bénéfice attendu : les agents disposent de limites claires avant d’agir sur ce dépôt.' },
+    evidence: { en: 'Observed in the applied AGENTS.md safety section.', fr: 'Constaté dans la section sécurité du fichier AGENTS.md appliqué.' }
+  });
+
+  if (added('## 🧪 Verification & Test Commands')) {
+    const documented = snapshot.commands.results
+      .filter(command => appliedAgents.includes(command.display) && !originalAgents.includes(command.display));
+    const passed = snapshot.commands.results.filter(command => command.status === 'passed').length;
+    gains.push({
+      title: { en: 'Verification commands available', fr: 'Commandes de vérification disponibles' },
+      change: { en: `${documented.length} command(s) newly documented for agents.`, fr: `${documented.length} commande(s) nouvellement documentée(s) pour les agents.` },
+      benefit: { en: 'Expected benefit: the next agent can find the project checks without searching package scripts.', fr: 'Bénéfice attendu : le prochain agent peut trouver les contrôles du projet sans chercher dans les scripts.' },
+      evidence: { en: `${passed}/${snapshot.commands.total} recorded checks passed; documentation is in AGENTS.md.`, fr: `${passed}/${snapshot.commands.total} contrôles enregistrés ont réussi ; commandes dans AGENTS.md.` }
+    });
+  }
+
+  if (added('## 🧩 Shared Components & Contract Stability')) gains.push({
+    title: { en: 'Shared library contract documented', fr: 'Contrat de la bibliothèque partagée documenté' },
+    change: { en: 'The instructions now call out compatibility of exported interfaces and consumers.', fr: 'Les consignes rappellent la compatibilité des exports et des projets consommateurs.' },
+    benefit: { en: 'Expected benefit: agents can consider downstream compatibility when editing this library.', fr: 'Bénéfice attendu : les agents peuvent tenir compte des projets consommateurs lors des modifications.' },
+    evidence: { en: 'Observed in the applied AGENTS.md shared-components section.', fr: 'Constaté dans la section composants partagés du fichier AGENTS.md appliqué.' }
+  });
+
+  if (appliedConfig !== null && appliedConfig !== originalConfig) gains.push({
+    title: { en: 'Machine-readable project configuration', fr: 'Configuration de projet lisible par les outils' },
+    change: { en: originalConfig === null ? 'agent-ready.json was created.' : 'agent-ready.json was updated.', fr: originalConfig === null ? 'Le fichier agent-ready.json a été créé.' : 'Le fichier agent-ready.json a été mis à jour.' },
+    benefit: { en: 'Expected benefit: compatible tools can discover project commands and protected paths.', fr: 'Bénéfice attendu : les outils compatibles peuvent repérer les commandes et les chemins protégés.' },
+    evidence: { en: 'Observed in the applied agent-ready.json file.', fr: 'Constaté dans le fichier agent-ready.json appliqué.' }
+  });
+
+  return gains;
 }
 
 export function generateCertificateHtml(snapshot: ApplicationSnapshot, initialLang: 'en' | 'fr' = 'en'): string {
@@ -85,6 +147,20 @@ export function generateCertificateHtml(snapshot: ApplicationSnapshot, initialLa
       </div>
     `).join('')
     : '<p class="text-xs text-gray-500 italic" data-i18n="no_findings">No prior anomalies.</p>';
+
+  const localizedGain = (value: { en: string; fr: string }, className: string) =>
+    `<span class="${className}${initialLang === 'fr' ? ' hidden' : ''}" data-gain-lang="en">${escapeHtml(value.en)}</span>` +
+    `<span class="${className}${initialLang === 'en' ? ' hidden' : ''}" data-gain-lang="fr">${escapeHtml(value.fr)}</span>`;
+  const gainsHtml = snapshot.gains?.length
+    ? snapshot.gains.map(gain => `
+      <article class="border-t border-gray-800 py-4 first:border-t-0 first:pt-0 last:pb-0">
+        <h3 class="text-sm font-semibold text-white mb-2">${localizedGain(gain.title, '')}</h3>
+        <p class="text-sm text-gray-200">${localizedGain(gain.change, '')}</p>
+        <p class="text-xs text-gray-400 mt-1">${localizedGain(gain.benefit, '')}</p>
+        <p class="text-xs text-emerald-300 mt-2">${localizedGain(gain.evidence, '')}</p>
+      </article>
+    `).join('')
+    : `<p class="text-sm text-gray-400" data-i18n="gains_empty">No file-level gain recorded for this application.</p>`;
 
   const origTokens = snapshot.tokenEconomy?.totalOriginalTokens;
   const optTokens = snapshot.tokenEconomy?.totalOptimizedTokens;
@@ -286,6 +362,13 @@ export function generateCertificateHtml(snapshot: ApplicationSnapshot, initialLa
 
     </section>
 
+    <!-- Actual file changes and expected benefits -->
+    <section class="border-t border-gray-800 pt-6">
+      <h2 class="text-base font-bold text-white mb-1" data-i18n="gains_title">Concrete gains</h2>
+      <p class="text-xs text-gray-400 mb-4" data-i18n="gains_subtitle">Changes are compared with the backed-up files. Expected benefits are not measured outcomes.</p>
+      <div>${gainsHtml}</div>
+    </section>
+
     <!-- Token Economy Section -->
     ${tokensSectionHtml}
 
@@ -366,6 +449,9 @@ export function generateCertificateHtml(snapshot: ApplicationSnapshot, initialLa
         passed_suffix: "passed",
         local_backup_title: "Local Backup",
         restore_anytime: "Restoration available at any time",
+        gains_title: "Concrete gains",
+        gains_subtitle: "Changes are compared with the backed-up files. Expected benefits are not measured outcomes.",
+        gains_empty: "No file-level gain recorded for this application.",
         roi_title: "Instructions and measured results",
         recorded_metrics: "Recorded metrics",
         measurement_limits: "Sizes are token estimates, not measured API usage. No monthly savings or guarantees of security or AI behavior.",
@@ -404,6 +490,9 @@ export function generateCertificateHtml(snapshot: ApplicationSnapshot, initialLa
         passed_suffix: "passés",
         local_backup_title: "Sauvegarde Locale",
         restore_anytime: "Restauration possible à tout moment",
+        gains_title: "Gains concrets",
+        gains_subtitle: "Les changements sont comparés aux fichiers sauvegardés. Les bénéfices attendus ne sont pas des résultats mesurés.",
+        gains_empty: "Aucun gain sur les fichiers n’a été enregistré pour cette application.",
         roi_title: "Instructions et résultats mesurés",
         recorded_metrics: "Mesures enregistrées",
         measurement_limits: "Les tailles sont des estimations de tokens, pas une consommation API mesurée. Aucune économie mensuelle ni garantie de sécurité ou de comportement IA.",
@@ -443,6 +532,9 @@ export function generateCertificateHtml(snapshot: ApplicationSnapshot, initialLa
         if (current[key]) {
           el.textContent = current[key];
         }
+      });
+      document.querySelectorAll('[data-gain-lang]').forEach(el => {
+        el.classList.toggle('hidden', el.getAttribute('data-gain-lang') !== lang);
       });
 
       const btnEn = document.getElementById('btn-en');
@@ -517,6 +609,7 @@ export function saveApplicationSnapshot(
 ): { htmlPath: string; jsonPath: string; htmlContent: string; jsonContent: string; globalHtmlPath?: string } {
   const root = fs.realpathSync(repoPath);
   const reportsDir = prepareReportStorage(root);
+  snapshot.gains ??= collectApplicationGains(snapshot);
 
   // Build structured, readable, and sortable filename
   const dateStr = formatTimestampForFile(snapshot.appliedAt ? new Date(snapshot.appliedAt) : new Date());
