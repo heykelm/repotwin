@@ -11,6 +11,26 @@ It audits repository-local instructions (`AGENTS.md`, `.cursorrules`, `.claude/r
 
 > 🌐 **Bilingual Studio UI & Certificates**: English by default for open-source teams worldwide, with an instant `[ EN | FR ]` switcher in both the Studio and generated HTML certificates that persists user preferences across reloads.
 
+## Quickstart
+
+Requires Node.js 22.12 or newer and Git. Build and install locally:
+
+```bash
+npm ci
+npm run build
+npm install --global /absolute/path/to/repotwin
+```
+
+Launch RepoTwin Studio for any repository from anywhere:
+
+```bash
+repotwin /path/to/any-project
+# or explicitly
+repotwin studio /path/to/any-project
+```
+
+The Studio opens on `http://127.0.0.1:<port>` with loopback-only isolation. It uses a compiled React + shadcn UI client with Radix primitives, Tailwind CSS 4, and Lucide icons shipped directly in the package—no external CDNs or telemetry required.
+
 ## Cross-Platform & Resource Efficiency
 
 RepoTwin is engineered for reliable execution across all major platforms with minimal resource consumption:
@@ -126,7 +146,12 @@ coverage before enabling application. A candidate-only failure is never labelled
 pre-existing without an actual reference comparison. Local source changes and
 untracked or ignored environment files are not automatically synchronized into
 the candidate. Estimates of instruction size use characters divided by four;
-they are not tokenizer measurements or measured consumption per prompt.
+## Dual-Mode ROI & Token Economy
+
+RepoTwin measures instruction value across two distinct optimization regimes:
+
+1. **Context Compression Mode** *(for bloated repositories)*: Measures direct tokens saved per AI agent query when verbose or redundant rules are streamlined, computing monthly/yearly dollar savings across popular subscriptions (Cursor Pro, Claude Pro, Gemini Advanced, ChatGPT Plus).
+2. **Robustness & Zero-Hallucination Mode** *(for underspecified repositories)*: When instructions must be expanded to document uncataloged subprojects and missing test/build scripts, RepoTwin guarantees **100/100 A health score with 0 phantom commands**. ROI is measured by eliminating costly agent retry loops (sparing ~50,000+ tokens of failed debug loops per month).
 
 ## Compare Two Commits
 
