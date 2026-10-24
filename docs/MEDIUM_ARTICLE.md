@@ -4,18 +4,23 @@
 
 ---
 
-Sure, there are plenty of theoretical "best practices" out there for keeping an `AGENTS.md` or `.cursorrules` clean. 
+We all know the theory. We’ve all read the blog posts and tutorials preaching "best practices" for keeping a pristine, structured `AGENTS.md` or `.cursorrules`.
 
-**But let's be honest about the real world:** 
-We don't always write the right rules at the right moment. Context shifts, projects evolve, and nobody is perfect. But there is always a way to get back on track.
+**But let’s talk about real life for a second.**
 
-I fell right into this trap myself—despite over **3 years of daily AI-assisted coding**. 
+In the daily grind of shipping features, fixing production bugs, and context switching, we don’t always write the right rules at the right moment. Subprojects evolve, commands change, and outdated notes pile up. Nobody is perfect.
 
-I was burning through fast requests, watching my AI coding agents loop in circles over phantom commands, and paying for context I never intended to send. That frustration is why I built and open-sourced **RepoTwin**: to save you precious time, stop burning your monthly quota, and give you a rock-solid way to take back control of your repositories.
+And here’s my honest confession: **I fell straight into this trap myself—despite more than 3 years of daily AI-assisted coding.**
 
----
+I found myself watching my AI agent—supposedly my ultra-smart co-pilot—burn 25,000 tokens looping through hallucinated test commands, trying phantom shell scripts, failing repeatedly, and draining my monthly fast requests before the week had barely begun. 
 
-### The Painful Reality Check
+The worst part? It wasn't the AI's fault. It was instruction drift.
+
+But there is always a way to get back on track. 
+
+That frustrating moment was the trigger that forced me to step back and build **RepoTwin**. Today, I am open-sourcing it with the community to save you from the exact same trap, stop burning your AI budget on ghost commands, and give you a bulletproof way to take back control of your repositories.
+
+Here is what really happens under the hood, why your AI agent gets stuck in infinite loops, and how empirical verification fixes it for good.
 
 If you are using **Cursor Pro**, **Claude Code**, **Gemini / Antigravity**, or **GitHub Copilot**, this scenario will sound painfully familiar:
 
