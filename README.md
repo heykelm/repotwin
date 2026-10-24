@@ -1,13 +1,15 @@
 # RepoTwin
 
+### **Stop burning your AI developer quotas on phantom commands and broken context.**
+
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Node](https://img.shields.io/badge/node-%3E%3D22.12-brightgreen.svg)](package.json)
 [![OS](https://img.shields.io/badge/os-macOS%20%7C%20Windows%20%7C%20Linux-blue.svg)](#cross-platform--resource-efficiency)
 [![Security: Isolated Twins](https://img.shields.io/badge/security-isolated%20twins-emerald.svg)](SECURITY.md)
 
-RepoTwin is an open-source reliability and instruction-optimization engine for AI coding agents (Cursor, Claude Code, Gemini Antigravity, GitHub Copilot, Codex).
+**RepoTwin** protects your AI coding subscriptions (Cursor Pro, Claude Code, Gemini Antigravity, GitHub Copilot, Codex) by ensuring your AI agents never waste tokens on hallucinated commands, bloated instruction files, or infinite failure loops.
 
-It audits repository-local instructions (`AGENTS.md`, `.cursorrules`, `.claude/rules`), detects documentation drift and ghost scripts, validates builds and test suites in **isolated Git Twins** with parallel subproject workers, simulates AI subscription ROI and token savings, and generates tamper-proof **Optimization & Deployment Certificates**.
+It empirically audits repository-local instructions (`AGENTS.md`, `.cursorrules`, `.claude/rules`), verifies real builds and tests in **isolated Git Twins** with parallel subproject workers, calculates hard dollar savings against your AI plans, and generates tamper-proof **Optimization & Deployment Certificates**.
 
 > 🌐 **Bilingual Studio UI & Certificates**: English by default for open-source teams worldwide, with an instant `[ EN | FR ]` switcher in both the Studio and generated HTML certificates that persists user preferences across reloads.
 
