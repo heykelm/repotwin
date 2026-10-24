@@ -62,8 +62,8 @@ repotwin twin clean /path/to/repo
 repotwin ui /path/to/repo --from-report audit.json
 repotwin verify /path/to/repo
 repotwin mcp /path/to/repo
-repotwin setup-mcp                     # Auto-configures Cursor, Claude Desktop, Gemini/Antigravity, Windsurf
-repotwin setup-mcp cursor claude --dry-run
+repotwin setup-mcp                     # Auto-configures detected JSON-based MCP clients
+repotwin setup-mcp cursor claude-desktop gemini antigravity --dry-run
 repotwin history                       # Centralized registry of all audits across repositories
 ```
 
@@ -76,6 +76,12 @@ twins without a recorded base commit are preserved for manual review.
 Imported-report scores are shown only for an explicitly selected report.
 RepoTwin also performs a separate fresh audit of instruction files. This
 weighted documentation score is not a measure of code quality or AI efficiency.
+
+MCP write operations follow the same guarded workflow as Studio: create a
+managed candidate, review the disclosed command plan, verify it inside the
+Twin, then apply with the one-time verification token. Direct checks against
+the source repository and unverified application are rejected. Restarting the
+MCP server expires all candidate and verification tokens.
 
 ## Candidate workflow
 

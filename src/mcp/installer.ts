@@ -18,7 +18,7 @@ export const SUPPORTED_IDES: TargetIde[] = [
     keyPath: 'mcpServers'
   },
   {
-    id: 'claude',
+    id: 'claude-desktop',
     name: 'Claude Desktop',
     getConfigPath: () => {
       const platform = process.platform;
@@ -34,8 +34,14 @@ export const SUPPORTED_IDES: TargetIde[] = [
   },
   {
     id: 'gemini',
-    name: 'Gemini / Antigravity',
-    getConfigPath: () => path.join(os.homedir(), '.gemini', 'config', 'mcp_config.json'),
+    name: 'Gemini CLI',
+    getConfigPath: () => path.join(os.homedir(), '.gemini', 'settings.json'),
+    keyPath: 'mcpServers'
+  },
+  {
+    id: 'antigravity',
+    name: 'Gemini Antigravity',
+    getConfigPath: () => path.join(os.homedir(), '.gemini', 'antigravity-ide', 'mcp_config.json'),
     keyPath: 'mcpServers'
   },
   {
@@ -52,6 +58,41 @@ export interface SetupOptions {
   binPath?: string;
 }
 
+function resolveExecutable(requested?: string): string {
+  const command = requested || 'repotwin';
+  if (command.includes(path.sep) || (process.platform === 'win32' && command.includes('/'))) {
+    const absolute = path.resolve(command);
+    if (!fs.existsSync(absolute)) throw new Error(`RepoTwin executable not found: ${absolute}`);
+    return absolute;
+  }
+  const extensions = process.platform === 'win32' ? ['', '.cmd', '.exe', '.bat'] : [''];
+  for (const directory of (process.env.PATH || '').split(path.delimiter).filter(Boolean)) {
+    for (const extension of extensions) {
+      const candidate = path.join(directory, `${command}${extension}`);
+      try {
+        fs.accessSync(candidate, fs.constants.X_OK);
+        return fs.realpathSync(candidate);
+      } catch {}
+    }
+  }
+  throw new Error(`Executable "${command}" was not found in PATH. Pass --bin with an absolute path.`);
+}
+
+function resolveMcpLaunch(requested?: string): { command: string; args: string[] } {
+  const executable = resolveExecutable(requested);
+  const realExecutable = fs.realpathSync(executable);
+  if (realExecutable.endsWith('.js')) {
+    return { command: process.execPath, args: [realExecutable, 'mcp'] };
+  }
+  return { command: executable, args: ['mcp'] };
+}
+
+function writeJsonAtomically(target: string, value: Record<string, unknown>): void {
+  const temporary = `${target}.${process.pid}.${Date.now()}.tmp`;
+  fs.writeFileSync(temporary, `${JSON.stringify(value, null, 2)}\n`, { encoding: 'utf8', mode: 0o600, flag: 'wx' });
+  fs.renameSync(temporary, target);
+}
+
 export function detectInstalledIdes(): TargetIde[] {
   return SUPPORTED_IDES.filter(ide => {
     const configPath = ide.getConfigPath();
@@ -65,12 +106,12 @@ export function installMcpForIde(ide: TargetIde, options: SetupOptions = {}): { 
   const configPath = ide.getConfigPath();
   const parentDir = path.dirname(configPath);
 
-  const executable = options.binPath || 'repotwin';
-
-  const mcpEntry = {
-    command: executable,
-    args: ['mcp']
-  };
+  let mcpEntry: { command: string; args: string[] };
+  try {
+    mcpEntry = resolveMcpLaunch(options.binPath);
+  } catch (error) {
+    return { success: false, message: error instanceof Error ? error.message : String(error), path: configPath };
+  }
 
   try {
     let configData: Record<string, unknown> = {};
@@ -80,8 +121,9 @@ export function installMcpForIde(ide: TargetIde, options: SetupOptions = {}): { 
       if (raw.length > 0) {
         try {
           configData = JSON.parse(raw);
-        } catch {
-          configData = {};
+        } catch (error) {
+          const detail = error instanceof Error ? error.message : String(error);
+          throw new Error(`Refusing to overwrite invalid JSON in ${configPath}: ${detail}`);
         }
       }
     }
@@ -96,7 +138,7 @@ export function installMcpForIde(ide: TargetIde, options: SetupOptions = {}): { 
     if (options.dryRun) {
       return {
         success: true,
-        message: `[DRY-RUN] Would write to ${configPath}:\n${JSON.stringify(configData, null, 2)}`,
+        message: `[DRY-RUN] Would register RepoTwin in ${configPath}:\n${JSON.stringify({ repotwin: mcpEntry }, null, 2)}`,
         path: configPath
       };
     }
@@ -106,11 +148,11 @@ export function installMcpForIde(ide: TargetIde, options: SetupOptions = {}): { 
     }
 
     if (fs.existsSync(configPath)) {
-      const backupPath = `${configPath}.bak`;
+      const backupPath = `${configPath}.bak.${new Date().toISOString().replace(/[:.]/g, '-')}`;
       fs.copyFileSync(configPath, backupPath);
     }
 
-    fs.writeFileSync(configPath, JSON.stringify(configData, null, 2) + '\n', 'utf8');
+    writeJsonAtomically(configPath, configData);
 
     return {
       success: true,
@@ -134,8 +176,8 @@ export function runMcpSetup(options: SetupOptions = {}): void {
   let targetIdes: TargetIde[] = [];
 
   if (options.targets && options.targets.length > 0 && !options.targets.includes('all')) {
-    const requested = options.targets.map(t => t.toLowerCase());
-    targetIdes = SUPPORTED_IDES.filter(ide => requested.includes(ide.id) || (ide.id === 'gemini' && requested.includes('antigravity')));
+    const requested = options.targets.map(t => t.toLowerCase()).map(t => t === 'claude' ? 'claude-desktop' : t);
+    targetIdes = SUPPORTED_IDES.filter(ide => requested.includes(ide.id));
     if (targetIdes.length === 0) {
       console.log(chalk.yellow(`No matching IDE found for: ${options.targets.join(', ')}`));
       console.log(`Supported IDEs: ${SUPPORTED_IDES.map(i => i.id).join(', ')}, all`);
@@ -147,7 +189,7 @@ export function runMcpSetup(options: SetupOptions = {}): void {
     if (targetIdes.length === 0) {
       console.log(chalk.yellow('No existing IDE config directory auto-detected.'));
       console.log('Defaulting to standard configurations (Cursor, Claude, Gemini)...');
-      targetIdes = SUPPORTED_IDES.filter(i => ['cursor', 'claude', 'gemini'].includes(i.id));
+      targetIdes = SUPPORTED_IDES.filter(i => ['cursor', 'claude-desktop', 'gemini', 'antigravity'].includes(i.id));
     }
   }
 

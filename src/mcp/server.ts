@@ -12,16 +12,42 @@ import crypto from 'node:crypto';
 import { analyzeRepository } from '../analyzer/analyze-repository.js';
 import { discoverSubprojects } from '../analyzer/subproject-scanner.js';
 import { generateOptimizationRecipe } from '../generator/recipe-agents-md.js';
-import { createCandidateTwin, cleanTwins } from '../twin/worktree-manager.js';
+import { GeneratedRecipe } from '../generator/recipe-agents-md.js';
+import { auditInstructions } from '../analyzer/instruction-audit.js';
+import { createCandidateTwin, candidateIsIntact, cleanCandidateIgnoredArtifacts, cleanTwins, TwinResult } from '../twin/worktree-manager.js';
 import { applyRecipe } from '../generator/apply-recipe.js';
-import { buildValidationPlan, runValidationPlan } from '../verification/command-runner.js';
+import { buildValidationPlan, runValidationPlan, validationConsentToken, ValidationCommand, ValidationResult } from '../verification/command-runner.js';
 import { saveApplicationSnapshot, ApplicationSnapshot } from '../report/application-snapshot.js';
+import { SubprojectInfo } from '../types/index.js';
+
+interface McpCandidate {
+  id: string;
+  repoPath: string;
+  recipe: GeneratedRecipe;
+  twin: TwinResult;
+  projects: SubprojectInfo[];
+  before: ReturnType<typeof auditInstructions>;
+  validationPlan: ValidationCommand[];
+  consentToken: string;
+  commandResults: ValidationResult[];
+  verified: boolean;
+  verificationToken?: string;
+  verification?: {
+    score: number;
+    grade: string;
+    resolved: Array<{ message: string }>;
+    introduced: number;
+    durationMs: number;
+  };
+}
 
 /**
  * Starts the official RepoTwin MCP server over Standard I/O (stdio).
  * Exposes repository inspection, candidate worktree twins, command verification, and fix application.
  */
-export async function startMcpServer(defaultRepoPath: string = process.cwd()): Promise<void> {
+export function createMcpServer(defaultRepoPath: string = process.cwd()): Server {
+  const sessionSecret = crypto.randomBytes(32).toString('hex');
+  const candidates = new Map<string, McpCandidate>();
   const server = new Server(
     {
       name: 'repotwin',
@@ -39,7 +65,28 @@ export async function startMcpServer(defaultRepoPath: string = process.cwd()): P
     if (!fs.existsSync(target) || !fs.statSync(target).isDirectory()) {
       throw new McpError(ErrorCode.InvalidParams, `Directory not found: ${target}`);
     }
-    return target;
+    return fs.realpathSync(target);
+  }
+
+  function requiredString(args: Record<string, unknown>, key: string): string {
+    const value = args[key];
+    if (typeof value !== 'string' || value.trim() === '') {
+      throw new McpError(ErrorCode.InvalidParams, `${key} is required`);
+    }
+    return value;
+  }
+
+  function getCandidate(args: Record<string, unknown>): McpCandidate {
+    const id = requiredString(args, 'candidateId');
+    const candidate = candidates.get(id);
+    if (!candidate) throw new McpError(ErrorCode.InvalidParams, 'Unknown or expired candidateId. Create a new twin.');
+    return candidate;
+  }
+
+  function fileSha(filePath: string): string {
+    return fs.existsSync(filePath)
+      ? crypto.createHash('sha256').update(fs.readFileSync(filePath)).digest('hex')
+      : '';
   }
 
   // 1. Tool declarations exposed by RepoTwin
@@ -49,6 +96,7 @@ export async function startMcpServer(defaultRepoPath: string = process.cwd()): P
         {
           name: 'repotwin_analyze',
           description: 'Analyze a Git repository or monorepo: detects subprojects, test/lint commands, agent instruction files (AGENTS.md, rules) and computes AI agent readiness health scores.',
+          annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
           inputSchema: {
             type: 'object',
             properties: {
@@ -62,6 +110,7 @@ export async function startMcpServer(defaultRepoPath: string = process.cwd()): P
         {
           name: 'repotwin_create_twin',
           description: 'Create an isolated digital twin (Git worktree) to safely sandbox, inspect, or modify proposed fixes without mutating working tree files.',
+          annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
           inputSchema: {
             type: 'object',
             properties: {
@@ -69,51 +118,82 @@ export async function startMcpServer(defaultRepoPath: string = process.cwd()): P
                 type: 'string',
                 description: 'Absolute or relative path to the source repository.'
               }
-            }
+            },
+            required: ['repoPath'],
+            additionalProperties: false
           }
         },
         {
           name: 'repotwin_run_checks',
-          description: 'Execute discovered repository verification commands (tests, lint, build) in the repository or an isolated twin. Returns exit codes and actionable stderr for AI agents.',
+          description: 'Execute the previously disclosed verification commands only inside a RepoTwin-managed candidate. Requires the candidate consent token returned at creation.',
+          annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
           inputSchema: {
             type: 'object',
             properties: {
-              targetPath: {
+              candidateId: {
                 type: 'string',
-                description: 'Path of the directory to verify (either an isolated twin returned by repotwin_create_twin, or the repository root).'
+                description: 'Opaque candidate identifier returned by repotwin_create_twin.'
+              },
+              commandConsent: {
+                type: 'string',
+                description: 'Consent token returned with the exact command plan by repotwin_create_twin.'
               },
               onlyFailed: {
                 type: 'boolean',
                 description: 'If true, re-runs only commands that failed in previous attempts.'
               }
             },
-            required: ['targetPath']
+            required: ['candidateId', 'commandConsent'],
+            additionalProperties: false
           }
         },
         {
           name: 'repotwin_apply_fix',
-          description: 'Safely apply the certified optimization recipe onto the main repository with automatic timestamped backup and official certification report generation.',
+          description: 'Apply one intact, fully verified candidate to its source repository. Requires the verification token and explicit confirmation. Never certifies commands that were not executed.',
+          annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
           inputSchema: {
             type: 'object',
             properties: {
-              repoPath: {
+              candidateId: {
                 type: 'string',
-                description: 'Path to the target repository where the fix should be applied.'
+                description: 'Opaque candidate identifier returned by repotwin_create_twin.'
+              },
+              verificationToken: {
+                type: 'string',
+                description: 'One-time token returned only after complete successful verification.'
+              },
+              confirmApply: {
+                type: 'boolean',
+                description: 'Must be true to explicitly authorize mutation of the source repository.'
+              },
+              selectedTools: {
+                type: 'array',
+                items: { type: 'string' },
+                description: 'Optional AI tools used only for token-economy reporting.'
               }
-            }
+            },
+            required: ['candidateId', 'verificationToken', 'confirmApply'],
+            additionalProperties: false
           }
         },
         {
           name: 'repotwin_clean_twins',
           description: 'Clean up orphaned or completed Git worktree twins in the RepoTwin cache.',
+          annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
           inputSchema: {
             type: 'object',
             properties: {
               repoPath: {
                 type: 'string',
                 description: 'Path to the source repository.'
+              },
+              confirmCleanup: {
+                type: 'boolean',
+                description: 'Must be true to authorize removal of unchanged RepoTwin-managed worktrees.'
               }
-            }
+            },
+            required: ['repoPath', 'confirmCleanup'],
+            additionalProperties: false
           }
         }
       ]
@@ -152,10 +232,26 @@ export async function startMcpServer(defaultRepoPath: string = process.cwd()): P
         }
 
         case 'repotwin_create_twin': {
-          const repo = resolvePath(args.repoPath as string | undefined);
+          const repo = resolvePath(requiredString(args, 'repoPath'));
           const subprojects = discoverSubprojects(repo);
+          const before = auditInstructions(repo, subprojects);
           const recipe = generateOptimizationRecipe(repo, subprojects, []);
           const twin = createCandidateTwin(repo, recipe);
+          const validationPlan = buildValidationPlan(subprojects);
+          const candidateId = crypto.randomUUID();
+          const consentToken = validationConsentToken(validationPlan, sessionSecret);
+          candidates.set(candidateId, {
+            id: candidateId,
+            repoPath: repo,
+            recipe,
+            twin,
+            projects: subprojects,
+            before,
+            validationPlan,
+            consentToken,
+            commandResults: [],
+            verified: false
+          });
 
           return {
             content: [
@@ -163,10 +259,19 @@ export async function startMcpServer(defaultRepoPath: string = process.cwd()): P
                 type: 'text',
                 text: JSON.stringify({
                   success: true,
+                  candidateId,
                   twinPath: twin.twinPath,
                   branchName: twin.branchName,
                   filesModified: twin.filesModified,
-                  message: 'Isolated twin created successfully. You can safely inspect and run checks in this twinPath.'
+                  validationPlan: validationPlan.map(command => ({
+                    id: command.id,
+                    project: command.project,
+                    path: command.relPath,
+                    kind: command.kind,
+                    command: command.display
+                  })),
+                  commandConsent: consentToken,
+                  message: 'Twin created. Review the disclosed command plan, then call repotwin_run_checks with this candidateId and commandConsent.'
                 }, null, 2)
               }
             ]
@@ -174,33 +279,83 @@ export async function startMcpServer(defaultRepoPath: string = process.cwd()): P
         }
 
         case 'repotwin_run_checks': {
-          const target = resolvePath(args.targetPath as string);
-          const subprojects = discoverSubprojects(target);
-          const plan = buildValidationPlan(subprojects);
+          const candidate = getCandidate(args);
+          candidate.verified = false;
+          candidate.verificationToken = undefined;
+          if (!candidateIsIntact(candidate.repoPath, candidate.twin)) {
+            throw new Error('Candidate changed before verification. Create a new twin.');
+          }
+          if (candidate.validationPlan.length > 0 && args.commandConsent !== candidate.consentToken) {
+            throw new McpError(ErrorCode.InvalidParams, 'The command consent token does not match the disclosed validation plan.');
+          }
 
-          // Skip redundant heavy install commands if node_modules already exists
-          const runnablePlan = plan.filter(cmd => {
-            if (cmd.kind === 'install') {
-              const nm = path.join(target, cmd.relPath, 'node_modules');
-              return !fs.existsSync(nm);
-            }
-            return true;
-          });
+          let planToRun = candidate.validationPlan;
+          if (args.onlyFailed === true && candidate.commandResults.length > 0) {
+            const failedIds = new Set(candidate.commandResults.filter(result => result.status !== 'passed').map(result => result.id));
+            planToRun = candidate.validationPlan.filter(command => failedIds.has(command.id));
+            if (planToRun.length === 0) planToRun = candidate.validationPlan;
+          }
+          const dependentProjects = new Set(planToRun.filter(command => command.kind !== 'install').map(command => command.relPath));
+          const selectedIds = new Set(planToRun.map(command => command.id));
+          planToRun = candidate.validationPlan.filter(command =>
+            selectedIds.has(command.id) || (command.kind === 'install' && dependentProjects.has(command.relPath))
+          );
 
-          const results = await runValidationPlan(target, runnablePlan);
+          const startedAt = Date.now();
+          const after = auditInstructions(candidate.twin.twinPath, candidate.projects);
+          const introduced = after.findings.filter(finding => !candidate.before.findings.some(previous =>
+            previous.file === finding.file && previous.rule === finding.rule && previous.message === finding.message
+          ));
+          const resolved = candidate.before.findings.filter(previous => !after.findings.some(finding =>
+            previous.file === finding.file && previous.rule === finding.rule && previous.message === finding.message
+          ));
+          const targetResults = await runValidationPlan(candidate.twin.twinPath, planToRun);
+          if (planToRun.length < candidate.validationPlan.length && candidate.commandResults.length > 0) {
+            const byId = new Map(candidate.commandResults.map(result => [result.id, result]));
+            for (const result of targetResults) byId.set(result.id, result);
+            candidate.commandResults = candidate.validationPlan
+              .map(command => byId.get(command.id))
+              .filter((result): result is ValidationResult => Boolean(result));
+          } else {
+            candidate.commandResults = targetResults;
+          }
 
-          const failed = results.filter(r => r.status !== 'passed');
-          const passed = results.filter(r => r.status === 'passed');
+          let cleanupError: string | undefined;
+          try {
+            cleanCandidateIgnoredArtifacts(candidate.repoPath, candidate.twin);
+          } catch (error) {
+            cleanupError = error instanceof Error ? error.message : String(error);
+          }
+          const candidateIntact = candidateIsIntact(candidate.repoPath, candidate.twin);
+          const commandsPassed = candidate.commandResults.length === candidate.validationPlan.length &&
+            candidate.validationPlan.every(command => candidate.commandResults.some(result => result.id === command.id && result.status === 'passed'));
+          candidate.verified = commandsPassed && candidateIntact && !cleanupError && introduced.length === 0;
+          candidate.verification = {
+            score: after.scores.correctedScore,
+            grade: after.scores.correctedGrade,
+            resolved: resolved.map(finding => ({ message: finding.message })),
+            introduced: introduced.length,
+            durationMs: Date.now() - startedAt
+          };
+          if (candidate.verified) candidate.verificationToken = crypto.randomBytes(32).toString('hex');
+
+          const failed = candidate.commandResults.filter(result => result.status !== 'passed');
+          const passed = candidate.commandResults.filter(result => result.status === 'passed');
 
           return {
             content: [
               {
                 type: 'text',
                 text: JSON.stringify({
-                  allPassed: failed.length === 0,
-                  totalCommands: results.length,
+                  allPassed: candidate.verified,
+                  canApply: candidate.verified,
+                  verificationToken: candidate.verificationToken,
+                  totalCommands: candidate.validationPlan.length,
                   passedCount: passed.length,
                   failedCount: failed.length,
+                  candidateIntact,
+                  noInstructionRegression: introduced.length === 0,
+                  cleanupError,
                   failures: failed.map(f => ({
                     id: f.id,
                     project: f.project,
@@ -224,18 +379,36 @@ export async function startMcpServer(defaultRepoPath: string = process.cwd()): P
         }
 
         case 'repotwin_apply_fix': {
-          const repo = resolvePath(args.repoPath as string | undefined);
-          const analysis = analyzeRepository(repo);
-          const subprojects = discoverSubprojects(repo);
-          const recipe = analysis.recipe;
-          const backupDir = applyRecipe(repo, recipe);
-          const validationPlan = buildValidationPlan(subprojects);
+          const candidate = getCandidate(args);
+          if (args.confirmApply !== true) throw new McpError(ErrorCode.InvalidParams, 'confirmApply must be true');
+          if (!candidate.verified || typeof args.verificationToken !== 'string' || args.verificationToken !== candidate.verificationToken) {
+            throw new Error('A successful current verification token is required before applying.');
+          }
+          if (!candidateIsIntact(candidate.repoPath, candidate.twin)) throw new Error('Candidate changed after verification.');
+          const agentsPath = path.join(candidate.twin.twinPath, 'AGENTS.md');
+          const readyPath = path.join(candidate.twin.twinPath, 'agent-ready.json');
+          if (fileSha(agentsPath) !== crypto.createHash('sha256').update(candidate.recipe.agentsMdContent).digest('hex') ||
+              fileSha(readyPath) !== crypto.createHash('sha256').update(candidate.recipe.agentReadyJsonContent).digest('hex')) {
+            throw new Error('Candidate recipe changed after verification.');
+          }
+          const currentRecipe = generateOptimizationRecipe(candidate.repoPath, discoverSubprojects(candidate.repoPath), []);
+          if (currentRecipe.agentsMdContent !== candidate.recipe.agentsMdContent ||
+              currentRecipe.agentReadyJsonContent !== candidate.recipe.agentReadyJsonContent) {
+            throw new Error('Source repository changed since candidate creation. Create and verify a new twin.');
+          }
 
+          const repo = candidate.repoPath;
           const currentAgentsPath = path.join(repo, 'AGENTS.md');
           const currentAgents = fs.existsSync(currentAgentsPath) ? fs.readFileSync(currentAgentsPath, 'utf-8') : '';
           const currentTokens = currentAgents ? Math.round(currentAgents.length / 4) : 0;
-          const proposedTokens = recipe.agentsMdContent ? Math.round(recipe.agentsMdContent.length / 4) : 0;
+          const proposedTokens = candidate.recipe.agentsMdContent ? Math.round(candidate.recipe.agentsMdContent.length / 4) : 0;
           const tokensSaved = Math.max(0, currentTokens - proposedTokens);
+          const selectedTools = Array.isArray(args.selectedTools)
+            ? args.selectedTools.filter((item): item is string => typeof item === 'string')
+            : [];
+          const backupDir = applyRecipe(repo, candidate.recipe);
+          candidate.verified = false;
+          candidate.verificationToken = undefined;
 
           const snapshot: ApplicationSnapshot = {
             id: crypto.randomUUID().slice(0, 8),
@@ -247,36 +420,36 @@ export async function startMcpServer(defaultRepoPath: string = process.cwd()): P
             repoPath: fs.realpathSync(repo),
             repoName: path.basename(repo),
             backupDir,
-            baseCommit: 'mcp-applied',
+            baseCommit: candidate.twin.branchName,
             scores: {
               before: {
-                score: analysis.scores.correctedScore,
-                grade: analysis.scores.correctedGrade
+                score: candidate.before.scores.correctedScore,
+                grade: candidate.before.scores.correctedGrade
               },
               after: {
-                score: analysis.scores.projectedScore,
-                grade: analysis.scores.projectedGrade
+                score: candidate.verification!.score,
+                grade: candidate.verification!.grade
               }
             },
             findings: {
-              resolvedCount: analysis.processed.length,
-              resolved: analysis.processed.map(f => ({ message: f.raw.message || f.raw.rule || 'Rule fix' })),
-              remainingCount: 0
+              resolvedCount: candidate.verification!.resolved.length,
+              resolved: candidate.verification!.resolved,
+              remainingCount: candidate.verification!.introduced
             },
             commands: {
-              total: validationPlan.length,
-              passed: validationPlan.length,
-              results: validationPlan.map(cmd => ({
-                id: cmd.id,
-                project: cmd.project,
-                display: cmd.display,
-                kind: cmd.kind,
-                status: 'passed',
-                durationMs: 0
+              total: candidate.validationPlan.length,
+              passed: candidate.commandResults.filter(result => result.status === 'passed').length,
+              results: candidate.commandResults.map(result => ({
+                id: result.id,
+                project: result.project,
+                display: result.display,
+                kind: result.kind,
+                status: result.status,
+                durationMs: result.durationMs
               }))
             },
             tokenEconomy: {
-              selectedTools: ['cursor', 'claude', 'gemini'],
+              selectedTools,
               tokensSavedPerQuery: tokensSaved,
               totalTokensSaved: tokensSaved,
               percentSaved: currentTokens > 0 ? Math.round((tokensSaved / currentTokens) * 100) : 0,
@@ -289,7 +462,7 @@ export async function startMcpServer(defaultRepoPath: string = process.cwd()): P
               yearlySavingsUsd: Number(((tokensSaved * 900 * 12 / 1_000_000) * 3).toFixed(2))
             },
             filesApplied: ['AGENTS.md', 'agent-ready.json'],
-            diff: ''
+            diff: candidate.twin.diff ?? ''
           };
 
           const saved = saveApplicationSnapshot(repo, snapshot);
@@ -322,8 +495,12 @@ export async function startMcpServer(defaultRepoPath: string = process.cwd()): P
         }
 
         case 'repotwin_clean_twins': {
-          const repo = resolvePath(args.repoPath as string | undefined);
+          if (args.confirmCleanup !== true) throw new McpError(ErrorCode.InvalidParams, 'confirmCleanup must be true');
+          const repo = resolvePath(requiredString(args, 'repoPath'));
           const result = cleanTwins(repo);
+          for (const [id, candidate] of candidates) {
+            if (candidate.repoPath === repo && !fs.existsSync(candidate.twin.twinPath)) candidates.delete(id);
+          }
           return {
             content: [
               {
@@ -355,6 +532,11 @@ export async function startMcpServer(defaultRepoPath: string = process.cwd()): P
     }
   });
 
+  return server;
+}
+
+export async function startMcpServer(defaultRepoPath: string = process.cwd()): Promise<void> {
+  const server = createMcpServer(defaultRepoPath);
   const transport = new StdioServerTransport();
   await server.connect(transport);
 }
