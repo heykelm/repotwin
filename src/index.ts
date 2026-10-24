@@ -16,6 +16,7 @@ import { generateHtmlReport } from './report/html-generator.js';
 import { startDevServer } from './server/dev-server.js';
 import { ProcessedFinding } from './types/index.js';
 import { auditInstructions } from './analyzer/instruction-audit.js';
+import { prepareComparison, compareRevisions } from './verification/revision-comparison.js';
 
 const program = new Command();
 
@@ -285,6 +286,65 @@ program
     startDevServer(repoPath, port, reportPath ? path.resolve(reportPath) : undefined);
   });
 
+program
+  .command('mcp [repoPath]')
+  .description('Start standard MCP (Model Context Protocol) server over stdio for AI coding agents')
+  .action(async (repoPathArg) => {
+    const repoPath = path.resolve(repoPathArg || process.cwd());
+    const { startMcpServer } = await import('./mcp/server.js');
+    await startMcpServer(repoPath);
+  });
+
+program
+  .command('setup-mcp [targets...]')
+  .description('Automatically register RepoTwin MCP server in Cursor, Claude Desktop, Gemini / Antigravity, and Windsurf')
+  .option('-d, --dry-run', 'Preview changes without modifying config files')
+  .option('-b, --bin <cmd>', 'Custom binary name or executable path (default: repotwin)')
+  .action(async (targets: string[], options: { dryRun?: boolean; bin?: string }) => {
+    const { runMcpSetup } = await import('./mcp/installer.js');
+    runMcpSetup({
+      targets: targets.length > 0 ? targets : undefined,
+      dryRun: options.dryRun,
+      binPath: options.bin
+    });
+  });
+
+program
+  .command('history')
+  .description('Show centralized registry and history of all RepoTwin certifications across repositories')
+  .action(async () => {
+    const os = await import('node:os');
+    const registryPath = path.join(os.homedir(), '.repotwin', 'registry.json');
+    if (!fs.existsSync(registryPath)) {
+      console.log(chalk.yellow('Aucun historique de certification trouvé (~/.repotwin/registry.json n\'existe pas encore).'));
+      return;
+    }
+
+    try {
+      const entries = JSON.parse(fs.readFileSync(registryPath, 'utf-8'));
+      if (!Array.isArray(entries) || entries.length === 0) {
+        console.log(chalk.yellow('L\'historique RepoTwin est actuellement vide.'));
+        return;
+      }
+
+      console.log(chalk.bold.cyan('\n📜 HISTORIQUE CENTRALISÉ DES AUDITS & CERTIFICATIONS REPOTWIN'));
+      console.log(chalk.gray('========================================================================================'));
+      for (const entry of entries) {
+        const isPassed = entry.status === 'PASSED';
+        const statusBadge = isPassed ? chalk.bgGreen.black.bold(' PASSED ') : chalk.bgYellow.black.bold(` ${entry.status} `);
+        const scoreBadge = chalk.bold.green(`${entry.scoreBefore}% ➔ ${entry.scoreAfter}% (${entry.gradeAfter})`);
+        
+        console.log(`${statusBadge} ${chalk.bold.white(entry.repoName)} ${chalk.dim(`[${entry.git}]`)} — ${entry.dateFormatted}`);
+        console.log(`   Score : ${scoreBadge} | Commandes : ${entry.commandsPassed}/${entry.commandsTotal} vérifiées`);
+        console.log(`   Rapport : ${chalk.cyan(entry.globalHtmlPath || entry.localHtmlPath)}`);
+        console.log(chalk.gray('----------------------------------------------------------------------------------------'));
+      }
+      console.log(`Total : ${chalk.bold(entries.length)} certification(s) enregistrée(s) dans ~/.repotwin/reports/\n`);
+    } catch (e) {
+      console.error(chalk.red('Erreur lors de la lecture du registre :'), e);
+    }
+  });
+
 // Default action: if no command is given, run analyze on current dir or repo
 program.command('verify [repoPath]')
   .description('Run fresh instruction-file checks; does not execute project scripts')
@@ -306,4 +366,25 @@ program
     else startDevServer(repoPath);
   });
 
-program.parse(process.argv);
+program.command('compare [repoPath]')
+  .description('Compare declared controls between two commits in isolated worktrees')
+  .option('--base <revision>', 'Reference commit, branch or tag', 'HEAD~1')
+  .option('--target <revision>', 'Version to check (committed changes only)', 'HEAD')
+  .option('--execute', 'Authorize the displayed installs and project commands on both versions')
+  .action(async (repoPathArg, options) => {
+    const repoPath = path.resolve(repoPathArg || process.cwd());
+    assertDirectory(repoPath);
+    const plan = prepareComparison(repoPath, options.base, options.target);
+    if (!options.execute) {
+      console.log(JSON.stringify({ mode: 'preview', plan, next: 'Review both command plans and script definitions. Use --execute to authorize execution.' }, null, 2));
+      return;
+    }
+    const report = await compareRevisions(repoPath, plan);
+    console.log(JSON.stringify(report, null, 2));
+    process.exitCode = report.counts.regression ? 1 : report.verdict === 'incomplete' ? 2 : 0;
+  });
+
+void program.parseAsync(process.argv).catch(error => {
+  console.error(error instanceof Error ? error.message : String(error));
+  process.exitCode = 1;
+});

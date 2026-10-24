@@ -115,13 +115,15 @@ export function buildFileIndex(repoPath: string, subprojects: SubprojectInfo[]):
   try {
     const trackedWithSubmodules = execFileSync('git', ['-C', repoPath, 'ls-files', '--cached', '--recurse-submodules'], {
       encoding: 'utf-8',
-      stdio: ['ignore', 'pipe', 'pipe']
+      stdio: ['ignore', 'pipe', 'pipe'],
+      maxBuffer: 128 * 1024 * 1024,
     }).split('\n').filter(Boolean);
     files.push(...trackedWithSubmodules);
 
     const untracked = execFileSync('git', ['-C', repoPath, 'ls-files', '--others', '--exclude-standard'], {
       encoding: 'utf-8',
-      stdio: ['ignore', 'pipe', 'pipe']
+      stdio: ['ignore', 'pipe', 'pipe'],
+      maxBuffer: 128 * 1024 * 1024,
     }).split('\n').filter(Boolean);
     files.push(...untracked);
   } catch {

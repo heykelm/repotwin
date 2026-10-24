@@ -59,4 +59,44 @@ describe('project command verification', () => {
       fs.rmSync(dir, { recursive: true, force: true });
     }
   });
+
+  it('runs independent subprojects concurrently while preserving plan order', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'rt-concurrent-'));
+    fs.mkdirSync(path.join(dir, 'p1'));
+    fs.mkdirSync(path.join(dir, 'p2'));
+
+    try {
+      const activeRunning = new Set<string>();
+      let maxOverlap = 0;
+      const cmd1: ValidationCommand = {
+        id: 'c1', project: 'p1', relPath: 'p1', kind: 'test',
+        executable: process.execPath, args: ['-e', 'setTimeout(() => {}, 60)'], display: 'p1 test'
+      };
+      const cmd2: ValidationCommand = {
+        id: 'c2', project: 'p2', relPath: 'p2', kind: 'test',
+        executable: process.execPath, args: ['-e', 'setTimeout(() => {}, 60)'], display: 'p2 test'
+      };
+
+      const results = await runValidationPlan(dir, [cmd1, cmd2], {
+        concurrency: 2,
+        onProgress: (evt) => {
+          if (evt.type === 'command_start') {
+            activeRunning.add(evt.command.id);
+            if (activeRunning.size > maxOverlap) maxOverlap = activeRunning.size;
+          }
+          if (evt.type === 'command_done') {
+            activeRunning.delete(evt.command.id);
+          }
+        }
+      });
+
+      expect(results).toHaveLength(2);
+      expect(results[0]?.id).toBe('c1');
+      expect(results[1]?.id).toBe('c2');
+      expect(results.every(r => r.status === 'passed')).toBe(true);
+      expect(maxOverlap).toBe(2);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
 });

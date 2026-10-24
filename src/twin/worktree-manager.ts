@@ -14,6 +14,8 @@ export interface TwinResult {
   submodulesInitialized?: string[];
   /** Submodules that could not be checked out; their commands will fail. */
   submoduleWarnings?: string[];
+  /** Local untracked/ignored .env files copied into the twin for realistic testing. */
+  envFilesCopied?: string[];
 }
 
 export interface CleanTwinsResult {
@@ -32,7 +34,8 @@ function manifestPath(): string {
 function runGit(repoPath: string, args: string[]): string {
   return execFileSync('git', ['-C', repoPath, ...args], {
     encoding: 'utf-8',
-    stdio: ['ignore', 'pipe', 'pipe']
+    stdio: ['ignore', 'pipe', 'pipe'],
+    maxBuffer: 128 * 1024 * 1024,
   });
 }
 
@@ -101,7 +104,7 @@ interface WorktreeRecord {
  * repository's submodules are only read. The pinned commit must already exist
  * in the local clone; otherwise the submodule is reported and left empty.
  */
-function initializeSubmodulesFromLocalClones(repoPath: string, twinPath: string): { initialized: string[]; warnings: string[] } {
+export function initializeSubmodulesFromLocalClones(repoPath: string, twinPath: string): { initialized: string[]; warnings: string[] } {
   const initialized: string[] = [];
   const warnings: string[] = [];
   if (!fs.existsSync(path.join(twinPath, '.gitmodules'))) return { initialized, warnings };
@@ -152,15 +155,132 @@ function initializeSubmodulesFromLocalClones(repoPath: string, twinPath: string)
   return { initialized, warnings };
 }
 
+function isEnvFile(filePath: string): boolean {
+  if (!filePath) return false;
+  const base = path.basename(filePath);
+  return base === '.env' || base.startsWith('.env.');
+}
+
+/**
+ * Copies local untracked and gitignored .env files from the source repository into the twin.
+ * This ensures that subproject tests or build tools (e.g. Flutter assets, Next.js, backend)
+ * run with the developer's exact local configuration without modifying the repository.
+ */
+export function copyLocalEnvFiles(sourceRepo: string, twinPath: string, explicitlyAuthorized = false): string[] {
+  if (!explicitlyAuthorized) return [];
+  const copied: string[] = [];
+  try {
+    const ignoredOut = runGit(sourceRepo, ['ls-files', '--others', '--ignored', '--exclude-standard', '-z']);
+    const untrackedOut = runGit(sourceRepo, ['ls-files', '--others', '--exclude-standard', '-z']);
+    const allFiles = [...new Set([...ignoredOut.split('\0'), ...untrackedOut.split('\0')])].filter(f => {
+      if (!f) return false;
+      if (
+        f.includes('node_modules/') ||
+        f.includes('/build/') ||
+        f.startsWith('build/') ||
+        f.includes('/.dart_tool/') ||
+        f.startsWith('.dart_tool/') ||
+        f.includes('/.next/') ||
+        f.startsWith('.next/') ||
+        f.includes('/.vercel/') ||
+        f.startsWith('.vercel/') ||
+        f.includes('/.git/') ||
+        f.startsWith('.git/')
+      ) {
+        return false;
+      }
+      return isEnvFile(f);
+    });
+
+    for (const relFile of allFiles) {
+      const src = path.join(sourceRepo, relFile);
+      const dest = path.join(twinPath, relFile);
+      if (fs.existsSync(src) && fs.statSync(src).isFile()) {
+        fs.mkdirSync(path.dirname(dest), { recursive: true });
+        fs.copyFileSync(src, dest);
+        copied.push(relFile);
+      }
+    }
+  } catch {
+    // Best-effort copy; ignored if git commands fail
+  }
+  return copied;
+}
+
+/**
+ * Synchronizes modifications from the source repository to an existing candidate twin.
+ * This copies uncommitted changes, newly added files, and local .env files so targeted
+ * re-tests reflect code fixes immediately without recreating the entire worktree.
+ */
+export function syncRepoChangesToTwin(sourceRepo: string, twinPath: string, explicitlyAuthorized = false): { syncedFiles: string[]; envCopied: string[] } {
+  if (!explicitlyAuthorized) return { syncedFiles: [], envCopied: [] };
+  const envCopied = copyLocalEnvFiles(sourceRepo, twinPath, true);
+  const syncedFiles: string[] = [];
+
+  try {
+    const diffFiles = runGit(sourceRepo, ['diff', 'HEAD', '--name-only', '-z']).split('\0').filter(Boolean);
+    const untrackedFiles = runGit(sourceRepo, ['ls-files', '--others', '--exclude-standard', '-z']).split('\0').filter(Boolean);
+    const candidates = [...new Set([...diffFiles, ...untrackedFiles])].filter(f => {
+      if (f === 'AGENTS.md' || f === 'agent-ready.json') return false;
+      if (
+        f.includes('node_modules/') ||
+        f.includes('/.git/') ||
+        f.startsWith('.git/') ||
+        f.includes('/build/') ||
+        f.startsWith('build/') ||
+        f.includes('/.dart_tool/') ||
+        f.startsWith('.dart_tool/') ||
+        f.includes('/.next/') ||
+        f.startsWith('.next/') ||
+        f.includes('/.vercel/') ||
+        f.startsWith('.vercel/')
+      ) {
+        return false;
+      }
+      return true;
+    });
+
+    for (const relFile of candidates) {
+      const src = path.join(sourceRepo, relFile);
+      const dest = path.join(twinPath, relFile);
+      if (fs.existsSync(src)) {
+        if (fs.statSync(src).isFile()) {
+          fs.mkdirSync(path.dirname(dest), { recursive: true });
+          fs.copyFileSync(src, dest);
+          syncedFiles.push(relFile);
+        }
+      } else if (fs.existsSync(dest)) {
+        try { fs.unlinkSync(dest); } catch {}
+      }
+    }
+  } catch {
+    // Best-effort
+  }
+
+  return { syncedFiles, envCopied };
+}
+
 function matchesRecipe(record: TwinManifestRecord): boolean {
   const expectedFiles = Object.keys(record.fileHashes);
   try {
     if (!record.baseCommit || runGit(record.twinPath, ['rev-parse', 'HEAD']).trim() !== record.baseCommit) return false;
     if (runGit(record.twinPath, ['diff', '--cached', '--name-only', '-z'])) return false;
-    if (runGit(record.twinPath, ['ls-files', '--others', '--ignored', '--exclude-standard', '-z'])) return false;
-    const changed = runGit(record.twinPath, ['diff', '--ignore-submodules=untracked', '--name-only', '-z']).split('\0').filter(Boolean);
-    const untracked = runGit(record.twinPath, ['ls-files', '--others', '--exclude-standard', '-z']).split('\0').filter(Boolean);
-    const allChanged = new Set([...changed, ...untracked]);
+    const ignored = runGit(record.twinPath, ['ls-files', '--others', '--ignored', '--exclude-standard', '-z'])
+      .split('\0')
+      .filter(Boolean);
+    if (ignored.length > 0) return false;
+    const TRANSIENT_TEST_ARTIFACTS = /(?:^|\/)(\.last-run\.json|test-results\/.*|\.phpunit\.result\.cache)$/;
+    const rawChanged = runGit(record.twinPath, ['diff', '--ignore-submodules=untracked', '--name-only', '-z']).split('\0').filter(Boolean);
+    for (const file of rawChanged) {
+      if (TRANSIENT_TEST_ARTIFACTS.test(file)) {
+        try { runGit(record.twinPath, ['checkout', 'HEAD', '--', file]); } catch { /* ignore */ }
+      }
+    }
+    const cleanChanged = runGit(record.twinPath, ['diff', '--ignore-submodules=untracked', '--name-only', '-z']).split('\0').filter(Boolean);
+    const untracked = runGit(record.twinPath, ['ls-files', '--others', '--exclude-standard', '-z'])
+      .split('\0')
+      .filter(Boolean);
+    const allChanged = new Set([...cleanChanged, ...untracked]);
     if ([...allChanged].some(file => !expectedFiles.includes(file))) return false;
 
     return expectedFiles.every(file => {
@@ -210,6 +330,7 @@ export function createCandidateTwin(
   const twinPath = path.join(baseDir, `${repoName}-candidate-${token}`);
   runGit(canonicalRepoPath, ['worktree', 'add', '-b', branchName, twinPath, 'HEAD']);
   const submodules = initializeSubmodulesFromLocalClones(canonicalRepoPath, twinPath);
+  const envFilesCopied = copyLocalEnvFiles(canonicalRepoPath, twinPath);
 
   try {
     writeFileAtomically(path.join(twinPath, 'AGENTS.md'), recipe.agentsMdContent);
@@ -258,7 +379,8 @@ export function createCandidateTwin(
     filesModified: ['AGENTS.md', 'agent-ready.json'],
     diff,
     submodulesInitialized: submodules.initialized,
-    submoduleWarnings: submodules.warnings
+    submoduleWarnings: submodules.warnings,
+    envFilesCopied
   };
 }
 
@@ -281,9 +403,19 @@ export function cleanCandidateIgnoredArtifacts(repoPath: string, twin: TwinResul
   if (runGit(record.twinPath, ['diff', '--cached', '--name-only', '-z'])) throw new Error('Candidate staged files during verification');
 
   const expectedFiles = Object.keys(record.fileHashes);
-  const changed = runGit(record.twinPath, ['diff', '--ignore-submodules=untracked', '--name-only', '-z']).split('\0').filter(Boolean);
-  const untracked = runGit(record.twinPath, ['ls-files', '--others', '--exclude-standard', '-z']).split('\0').filter(Boolean);
-  if ([...changed, ...untracked].some(file => !expectedFiles.includes(file))) {
+  const TRANSIENT_TEST_ARTIFACTS = /(?:^|\/)(\.last-run\.json|test-results\/.*|\.phpunit\.result\.cache)$/;
+  const rawChanged = runGit(record.twinPath, ['diff', '--ignore-submodules=untracked', '--name-only', '-z']).split('\0').filter(Boolean);
+  for (const file of rawChanged) {
+    if (TRANSIENT_TEST_ARTIFACTS.test(file)) {
+      try { runGit(record.twinPath, ['checkout', 'HEAD', '--', file]); } catch { /* ignore */ }
+    }
+  }
+
+  const cleanChanged = runGit(record.twinPath, ['diff', '--ignore-submodules=untracked', '--name-only', '-z']).split('\0').filter(Boolean);
+  const untracked = runGit(record.twinPath, ['ls-files', '--others', '--exclude-standard', '-z'])
+    .split('\0')
+    .filter(Boolean);
+  if ([...cleanChanged, ...untracked].some(file => !expectedFiles.includes(file))) {
     throw new Error('Project commands changed source files in the candidate');
   }
   for (const file of expectedFiles) {
@@ -293,8 +425,13 @@ export function cleanCandidateIgnoredArtifacts(repoPath: string, twin: TwinResul
     }
   }
 
-  const ignored = runGit(record.twinPath, ['ls-files', '--others', '--ignored', '--exclude-standard', '-z']).split('\0').filter(Boolean);
-  if (ignored.length) runGit(record.twinPath, ['clean', '-fdX']);
+  const ignored = runGit(record.twinPath, ['ls-files', '--others', '--ignored', '--exclude-standard', '-z'])
+    .split('\0')
+    .filter(Boolean);
+  if (ignored.length) {
+    runGit(record.twinPath, ['clean', '-fdX']);
+    copyLocalEnvFiles(canonicalRepoPath, record.twinPath);
+  }
   return ignored;
 }
 

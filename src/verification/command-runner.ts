@@ -182,21 +182,102 @@ export async function runValidationCommand(
   });
 }
 
+export interface ValidationProgressEvent {
+  type: 'command_start' | 'command_done';
+  index: number;
+  total: number;
+  command: ValidationCommand;
+  result?: ValidationResult;
+}
+
 export async function runValidationPlan(
   twinPath: string,
   commands: ValidationCommand[],
-  options: { timeoutMs?: number; maxOutputBytes?: number } = {}
+  options: {
+    timeoutMs?: number;
+    maxOutputBytes?: number;
+    concurrency?: number;
+    onProgress?: (event: ValidationProgressEvent) => void;
+  } = {}
 ): Promise<ValidationResult[]> {
-  const results: ValidationResult[] = [];
-  const failedInstalls = new Set<string>();
-  for (const command of commands) {
-    if (command.kind !== 'install' && failedInstalls.has(command.relPath)) {
-      results.push({ ...command, status: 'unavailable', exitCode: null, durationMs: 0, output: 'Skipped: dependency install failed for this project.', outputTruncated: false });
-      continue;
-    }
-    const result = await runValidationCommand(twinPath, command, options);
-    if (command.kind === 'install' && result.status !== 'passed') failedInstalls.add(command.relPath);
-    results.push(result);
+  if (commands.length === 0) return [];
+
+  const results: ValidationResult[] = new Array(commands.length);
+
+  // Group commands by subproject directory (relPath).
+  // Inside each subproject, commands must run sequentially (install -> test -> lint -> build).
+  // Distinct subprojects run concurrently up to the concurrency limit.
+  interface IndexedCommand {
+    command: ValidationCommand;
+    index: number;
   }
+  const groups = new Map<string, IndexedCommand[]>();
+  for (let index = 0; index < commands.length; index++) {
+    const command = commands[index];
+    const list = groups.get(command.relPath) || [];
+    list.push({ command, index });
+    groups.set(command.relPath, list);
+  }
+
+  const defaultConcurrency = process.env.REPOTWIN_CONCURRENCY
+    ? parseInt(process.env.REPOTWIN_CONCURRENCY, 10) || 3
+    : 3;
+  const concurrencyLimit = Math.max(1, options.concurrency ?? defaultConcurrency);
+
+  const groupQueue = Array.from(groups.values());
+  let nextGroupIdx = 0;
+
+  async function runGroupWorker(): Promise<void> {
+    while (nextGroupIdx < groupQueue.length) {
+      const currentGroup = groupQueue[nextGroupIdx++];
+      let installFailed = false;
+
+      for (const { command, index } of currentGroup) {
+        if (command.kind !== 'install' && installFailed) {
+          const skipped: ValidationResult = {
+            ...command,
+            status: 'unavailable',
+            exitCode: null,
+            durationMs: 0,
+            output: 'Skipped: dependency install failed for this project.',
+            outputTruncated: false
+          };
+          results[index] = skipped;
+          options.onProgress?.({
+            type: 'command_done',
+            index,
+            total: commands.length,
+            command,
+            result: skipped
+          });
+          continue;
+        }
+
+        options.onProgress?.({
+          type: 'command_start',
+          index,
+          total: commands.length,
+          command
+        });
+
+        const result = await runValidationCommand(twinPath, command, options);
+        if (command.kind === 'install' && result.status !== 'passed') {
+          installFailed = true;
+        }
+
+        results[index] = result;
+        options.onProgress?.({
+          type: 'command_done',
+          index,
+          total: commands.length,
+          command,
+          result
+        });
+      }
+    }
+  }
+
+  const workerCount = Math.min(concurrencyLimit, groupQueue.length);
+  await Promise.all(Array.from({ length: workerCount }, () => runGroupWorker()));
   return results;
 }

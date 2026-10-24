@@ -16,6 +16,7 @@ export type RefClassification =
   | 'UNKNOWN';
 
 export interface RawFinding {
+  line?: number;
   severity: Severity;
   rule: string;
   message: string;

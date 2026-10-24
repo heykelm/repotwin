@@ -3,7 +3,7 @@ import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { candidateIsIntact, cleanCandidateIgnoredArtifacts, cleanTwins, createCandidateTwin } from '../src/twin/worktree-manager.js';
+import { candidateIsIntact, cleanCandidateIgnoredArtifacts, cleanTwins, copyLocalEnvFiles, createCandidateTwin, syncRepoChangesToTwin } from '../src/twin/worktree-manager.js';
 
 const directories: string[] = [];
 
@@ -29,6 +29,24 @@ afterEach(() => {
 });
 
 describe('worktree manager', () => {
+  it('keeps local credentials and uncommitted source out of candidates by default', () => {
+    const repo = temporaryRepository();
+    const cache = fs.mkdtempSync(path.join(os.tmpdir(), 'repotwin-cache-'));
+    directories.push(cache);
+    process.env.REPOTWIN_TWINS_DIR = cache;
+    fs.appendFileSync(path.join(repo, '.git', 'info', 'exclude'), '\n.env\n');
+    fs.writeFileSync(path.join(repo, '.env'), 'LOCAL_TEST_SENTINEL=private\n');
+    fs.writeFileSync(path.join(repo, 'README.md'), 'uncommitted source');
+    const twin = createCandidateTwin(repo, { agentsMdContent: '# recipe', agentReadyJsonContent: '{}', summaryChanges: [] });
+    expect(fs.existsSync(path.join(twin.twinPath, '.env'))).toBe(false);
+    expect(copyLocalEnvFiles(repo, twin.twinPath)).toEqual([]);
+    expect(syncRepoChangesToTwin(repo, twin.twinPath)).toEqual({ syncedFiles: [], envCopied: [] });
+    expect(fs.readFileSync(path.join(twin.twinPath, 'README.md'), 'utf8')).toBe('# fixture\n');
+    fs.writeFileSync(path.join(twin.twinPath, '.env'), 'user-created configuration');
+    expect(candidateIsIntact(repo, twin)).toBe(false);
+    expect(cleanTwins(repo)).toEqual({ cleaned: 0, skippedDirty: 1 });
+    expect(fs.readFileSync(path.join(twin.twinPath, '.env'), 'utf8')).toBe('user-created configuration');
+  });
   it.each(['staged', 'committed', 'ignored'])('preserves %s user work', (mode) => {
     const repo = temporaryRepository();
     const cache = fs.mkdtempSync(path.join(os.tmpdir(), 'repotwin-cache-'));
