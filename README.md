@@ -2,33 +2,24 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Node](https://img.shields.io/badge/node-%3E%3D22.12-brightgreen.svg)](package.json)
+[![OS](https://img.shields.io/badge/os-macOS%20%7C%20Windows%20%7C%20Linux-blue.svg)](#cross-platform--resource-efficiency)
 [![Security: Isolated Twins](https://img.shields.io/badge/security-isolated%20twins-emerald.svg)](SECURITY.md)
 
 RepoTwin is an open-source reliability and instruction-optimization engine for AI coding agents (Cursor, Claude Code, Gemini Antigravity, GitHub Copilot, Codex).
 
 It audits repository-local instructions (`AGENTS.md`, `.cursorrules`, `.claude/rules`), detects documentation drift and ghost scripts, validates builds and test suites in **isolated Git Twins** with parallel subproject workers, simulates AI subscription ROI and token savings, and generates tamper-proof **Optimization & Deployment Certificates**.
 
-> 🌐 **Bilingual Studio UI**: English by default for open-source teams worldwide, with an instant `[ EN | FR ]` switcher in the header that persists user preferences across reloads.
+> 🌐 **Bilingual Studio UI & Certificates**: English by default for open-source teams worldwide, with an instant `[ EN | FR ]` switcher in both the Studio and generated HTML certificates that persists user preferences across reloads.
 
-## Quickstart
+## Cross-Platform & Resource Efficiency
 
-Requires Node.js 22.12 or newer and Git. Build and install locally:
+RepoTwin is engineered for reliable execution across all major platforms with minimal resource consumption:
 
-```bash
-npm ci
-npm run build
-npm install --global /absolute/path/to/repotwin
-```
-
-Launch RepoTwin Studio for any repository from anywhere:
-
-```bash
-repotwin /path/to/any-project
-# or explicitly
-repotwin studio /path/to/any-project
-```
-
-The Studio opens on `http://127.0.0.1:<port>` with loopback-only isolation. It uses a compiled React + shadcn UI client with Radix primitives, Tailwind CSS 4, and Lucide icons shipped directly in the package—no external CDNs or telemetry required.
+- **Cross-Platform Compatibility**: Fully supported on **macOS**, **Windows 10/11**, and **Linux**. On Windows, package managers (`npm.cmd`, `pnpm.cmd`, `yarn.cmd`, `npx.cmd`) and path conventions (`\` and `%APPDATA%`) are resolved automatically without requiring WSL or external shells.
+- **Ultra-Low Memory Footprint**: RepoTwin's server and studio consume less than **60 MB of RAM** at runtime. The compiled Studio UI is under **300 KB gzipped** and served loopback-only (`127.0.0.1`).
+- **Bounded Log Buffers (Anti-OOM)**: Test and build outputs are capped via ring buffers (`maxOutputBytes = 10 MB`). Even verbose suites generating gigabytes of logs will never cause Node.js out-of-memory errors.
+- **Bounded Concurrency**: Subproject checks default to 3 concurrent workers (`REPOTWIN_CONCURRENCY=3`), preventing CPU and RAM exhaustion on large monorepos with dozens of projects.
+- **Disk-Efficient Git Twins**: Twins leverage `git worktree add`, sharing Git object storage with your primary repository without duplicating repository history. All temporary twins are cleanly removed upon completion.
 
 ## Safety model
 

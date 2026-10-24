@@ -522,7 +522,7 @@ function RoiCard({
               </p>
               <Badge variant="outline" className={`font-mono text-[10px] ${isRobustness ? 'border-emerald-500/40 text-emerald-300' : 'border-indigo-500/40 text-indigo-300'}`}>
                 {isRobustness
-                  ? '100/100 A · Certifié'
+                  ? (lang === 'fr' ? '100/100 A · Certifié' : '100/100 A · Certified')
                   : isAlreadyOptimized ? 'Active · 100/100 A' : pctSavings > 0 ? `-${pctSavings}%` : 'Standardized'}
               </Badge>
             </div>
@@ -537,7 +537,7 @@ function RoiCard({
             </p>
             <p className="mt-1 text-[10px] text-emerald-400 font-medium">
               {isRobustness
-                ? `+${Math.max(0, proposedTokens - currentTokens)} tok (couverture 100% sans commande fantôme)`
+                ? (lang === 'fr' ? `+${Math.max(0, proposedTokens - currentTokens)} tok (couverture 100% sans commande fantôme)` : `+${Math.max(0, proposedTokens - currentTokens)} tok (100% coverage, 0 phantom commands)`)
                 : isAlreadyOptimized
                 ? `✨ ${t('roi_compact_context')}`
                 : delta > 0 ? `-${delta} tokens / prompt` : t('roi_compact_context')}
@@ -554,7 +554,7 @@ function RoiCard({
               </span>
             </div>
             <p className="mt-1.5 font-mono text-base font-semibold text-emerald-300">
-              0 retry infructueux
+              {lang === 'fr' ? '0 retry infructueux' : '0 failed retries'}
             </p>
             <p className="mt-1 text-[10px] text-emerald-400 font-medium">
               {lang === 'fr' ? 'Commandes réelles testées et prouvées' : 'Real commands verified & proven'}
@@ -567,11 +567,11 @@ function RoiCard({
                 {lang === 'fr' ? 'Fiabilité & Isolation Git' : 'Reliability & Git Isolation'}
               </p>
               <Badge variant="success" className="text-[10px]">
-                100% Sûr
+                {lang === 'fr' ? '100% Sûr' : '100% Safe'}
               </Badge>
             </div>
             <p className="mt-1.5 font-mono text-base font-semibold text-teal-300">
-              Worktree Étanche
+              {lang === 'fr' ? 'Worktree Étanche' : 'Isolated Worktree'}
             </p>
             <p className="mt-1 text-[10px] text-zinc-400">
               {lang === 'fr' ? 'Branche principale protégée jusqu’à validation' : 'Main branch untouched until verified'}
