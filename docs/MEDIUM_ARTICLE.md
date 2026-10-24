@@ -4,6 +4,19 @@
 
 ---
 
+Sure, there are plenty of theoretical "best practices" out there for keeping an `AGENTS.md` or `.cursorrules` clean. 
+
+**But let's be honest about the real world:** 
+We don't always write the right rules at the right moment. Context shifts, projects evolve, and nobody is perfect. But there is always a way to get back on track.
+
+I fell right into this trap myself—despite over **3 years of daily AI-assisted coding**. 
+
+I was burning through fast requests, watching my AI coding agents loop in circles over phantom commands, and paying for context I never intended to send. That frustration is why I built and open-sourced **RepoTwin**: to save you precious time, stop burning your monthly quota, and give you a rock-solid way to take back control of your repositories.
+
+---
+
+### The Painful Reality Check
+
 If you are using **Cursor Pro**, **Claude Code**, **Gemini / Antigravity**, or **GitHub Copilot**, this scenario will sound painfully familiar:
 
 You start your week with 500 fast requests. You prompt your agent to fix a bug in a monorepo. The agent writes some code, and then attempts to verify its work. 
