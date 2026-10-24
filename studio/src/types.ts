@@ -41,7 +41,7 @@ export interface Subproject {
 export interface StudioPayload {
   ok: true;
   sessionToken: string;
-  repo: { name: string; path: string; branch: string; commit: string; port: number; analyzedAt: string };
+  repo: { name: string; path: string; branch: string; commit: string; port: number; analyzedAt: string; hasUncommittedChanges?: boolean };
   analysis: {
     subprojects: Subproject[];
     falsePositives: Array<{ classification: string; targetRef?: string; explanation: string; raw: Finding }>;

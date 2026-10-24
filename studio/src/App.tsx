@@ -33,66 +33,6 @@ const comparisonLabels: Record<string, string> = {
 
 type AiDevTool = 'cursor' | 'claude' | 'gemini' | 'openai' | 'copilot' | 'api';
 
-interface AiDevToolConfig {
-  id: AiDevTool;
-  label: string;
-  plan: string;
-  monthlyQueries: number;
-  highlight: string;
-  quotaDescription: string;
-}
-
-const getAiDevTools = (lang: Language): Record<AiDevTool, AiDevToolConfig> => ({
-  cursor: {
-    id: 'cursor',
-    label: 'Cursor Pro',
-    plan: '$20/mo',
-    monthlyQueries: 350,
-    highlight: lang === 'fr' ? 'Quota Fast Requests protégé' : 'Fast Requests Quota Preserved',
-    quotaDescription: lang === 'fr' ? 'Évite d’épuiser vos 500 fast requests mensuelles dans Cursor Composer' : 'Prevents exhausting your 500 monthly fast requests in Cursor Composer'
-  },
-  claude: {
-    id: 'claude',
-    label: 'Claude Pro / Code',
-    plan: '$20/mo',
-    monthlyQueries: 250,
-    highlight: lang === 'fr' ? 'Autonomie 5h prolongée' : 'Extended 5h Session Window',
-    quotaDescription: lang === 'fr' ? 'Moins de tokens de contexte ingérés = la limite 5h de Claude recule' : 'Fewer ingested context tokens = Claude 5-hour rate limits trigger much later'
-  },
-  gemini: {
-    id: 'gemini',
-    label: 'Gemini / Antigravity',
-    plan: '$20/mo',
-    monthlyQueries: 300,
-    highlight: lang === 'fr' ? 'Fenêtre 1M-2M épurée & réactivité max' : 'Ultra-Clean 1M-2M Window & Max Reactivity',
-    quotaDescription: lang === 'fr' ? 'Élimine le bruit parasite pour des réponses instantanées sans dérive' : 'Removes parasitic noise for instant responses with zero drift'
-  },
-  openai: {
-    id: 'openai',
-    label: 'ChatGPT Plus / Codex',
-    plan: '$20/mo',
-    monthlyQueries: 300,
-    highlight: lang === 'fr' ? 'Raisonnement o1 / GPT-4o focalisé' : 'Focused o1 / GPT-4o Reasoning',
-    quotaDescription: lang === 'fr' ? 'Plafond de messages GPT-4o préservé, 0 token gaspillé sur les tests' : 'GPT-4o message caps preserved, 0 tokens wasted on test suites'
-  },
-  copilot: {
-    id: 'copilot',
-    label: 'GitHub Copilot',
-    plan: '$10/mo',
-    monthlyQueries: 200,
-    highlight: lang === 'fr' ? 'Zéro complétion parasite' : 'Zero Parasitic Completions',
-    quotaDescription: lang === 'fr' ? 'Indexation nette et séparation stricte des 4 sous-projets du monorepo' : 'Clean indexing and strict separation across monorepo subprojects'
-  },
-  api: {
-    id: 'api',
-    label: 'Pay-as-you-go API',
-    plan: '~$3/M tok',
-    monthlyQueries: 400,
-    highlight: lang === 'fr' ? 'Facture API réduite' : 'Direct API Cost Reduction',
-    quotaDescription: lang === 'fr' ? 'Économie financière directe et mesurable sur Anthropic ou OpenAI' : 'Direct, measurable savings on Anthropic or OpenAI API usage'
-  }
-});
-
 export function App() {
   const { t, lang } = useI18n();
   const [payload, setPayload] = useState<StudioPayload | null>(null);
@@ -441,6 +381,7 @@ function Diagnostic({
   const { t } = useI18n();
   const audit = payload.analysis.instructionAudit;
   return <div className="space-y-5">
+    {payload.repo.hasUncommittedChanges && <p role="status" className="border-l-2 border-amber-500 pl-3 text-sm text-amber-200">{t('diag_committed_scope')}</p>}
     <RoiCard payload={payload} selectedTools={selectedTools} onToggleTool={onToggleTool} />
     <Card><CardHeader><CardTitle className="flex items-center gap-2"><AlertCircle className="h-4 w-4 text-amber-400" />{t('diag_findings_title')}</CardTitle><CardDescription>{t('diag_findings_desc', { count: audit.findings.length })}</CardDescription></CardHeader><CardContent className="space-y-2">
       {audit.findings.length ? audit.findings.map((finding, index) => <div key={`${finding.rule}-${index}`} className="rounded-md border bg-background p-3 text-sm"><div className="flex flex-wrap gap-2"><Badge variant="outline" className="font-mono">{finding.file}{finding.line ? `:${finding.line}` : ''}</Badge><span>{finding.message}</span></div>{finding.fix && <p className="mt-2 text-xs text-muted-foreground">{finding.fix}</p>}</div>) : <EmptySuccess text={t('diag_no_findings')} />}
@@ -460,28 +401,17 @@ function RoiCard({
   selectedTools: AiDevTool[];
   onToggleTool: (id: AiDevTool) => void;
 }) {
-  const { t, lang } = useI18n();
-  const tools = getAiDevTools(lang);
-  const metrics = payload.analysis.metrics;
-  const currentTokens = metrics.currentInstructionTokens || 0;
-  const proposedTokens = metrics.proposedInstructionTokens || 0;
-  const delta = currentTokens - proposedTokens;
-  const isAlreadyOptimized = payload.analysis.instructionAudit.findings.length === 0;
-  const effectiveTokensSavedPerQuery = delta > 0 ? delta : isAlreadyOptimized ? 2000 : 0;
-  const pctSavings = currentTokens > 0 && delta > 0 ? Math.round((delta / currentTokens) * 100) : isAlreadyOptimized ? 75 : 0;
-
-  const activeConfigs = selectedTools.map(id => tools[id]);
-  const totalMonthlyQueries = activeConfigs.reduce((sum, c) => sum + c.monthlyQueries, 0);
-  const monthlySavedTokens = Math.max(0, effectiveTokensSavedPerQuery * totalMonthlyQueries);
-  const yearlySavedTokens = monthlySavedTokens * 12;
-  const monthlySavingsUsd = ((monthlySavedTokens / 1_000_000) * 3).toFixed(2);
-  const monthlySavingsEur = ((monthlySavedTokens / 1_000_000) * 2.8).toFixed(2);
-  const yearlySavingsUsd = Math.round((yearlySavedTokens / 1_000_000) * 3);
-
-  const isRobustness = delta <= 0 && !isAlreadyOptimized;
-  const loopAvoidanceMonthlyTokens = Math.round((totalMonthlyQueries || 500) * 0.10 * 6000);
-  const loopAvoidanceSavingsEur = ((loopAvoidanceMonthlyTokens / 1_000_000) * 2.8).toFixed(2);
-  const loopAvoidanceSavingsUsd = ((loopAvoidanceMonthlyTokens / 1_000_000) * 3).toFixed(2);
+  const { lang } = useI18n();
+  const fr = lang === 'fr';
+  const { currentInstructionTokens: before, proposedInstructionTokens: after } = payload.analysis.metrics;
+  const audit = payload.analysis.instructionAudit;
+  const verification = payload.state.verification;
+  const results = payload.state.commandResults;
+  const passed = results.filter(result => result.status === 'passed').length;
+  const delta = after - before;
+  const status = verification
+    ? (verification.passed ? (fr ? 'Validation réussie' : 'Verification passed') : (fr ? 'Validation non réussie' : 'Verification not passed'))
+    : (fr ? 'Validation non terminée' : 'Verification not completed');
 
   return (
     <Card className="border-indigo-500/30 bg-gradient-to-br from-indigo-950/20 via-background to-background">
@@ -491,23 +421,21 @@ function RoiCard({
             <div className="flex items-center gap-2">
               <CardTitle className="flex items-center gap-2 text-base text-indigo-300">
                 <Sparkles className="h-4 w-4 text-indigo-400" />
-                {lang === 'fr' ? 'Efficacité du Contexte & Zéro-Hallucination' : 'Context Efficiency & Zero-Hallucination'}
+                {fr ? 'Instructions et résultats mesurés' : 'Instructions and measured results'}
               </CardTitle>
               <Badge variant="outline" className="font-mono text-[10px] border-emerald-500/40 text-emerald-300">
-                {lang === 'fr' ? 'Architecture 100% Couverte' : '100% Architecture Covered'}
+                {fr ? 'Analyse du dépôt' : 'Repository analysis'}
               </Badge>
             </div>
             <CardDescription className="text-xs mt-0.5">
-              {lang === 'fr'
-                ? 'Instructions déterministes validées. Élimine les boucles d’échec et protège les quotas de requêtes IA.'
-                : 'Deterministic certified instructions. Eliminates hallucinated retry loops and preserves agent context.'}
+              {fr
+                ? 'Tailles estimées à partir des instructions. Aucune économie mensuelle ni garantie de sécurité ou de comportement IA.'
+                : 'Sizes estimated from instructions. No monthly savings or guarantees of security or AI behavior.'}
             </CardDescription>
           </div>
           
           <div className="flex items-center gap-2 text-xs font-mono text-emerald-300 bg-emerald-950/40 border border-emerald-500/30 px-3 py-1.5 rounded-lg shrink-0">
-            <span>🛡️ {lang === 'fr' ? 'Jumeau Git Étanche' : 'Isolated Git Twin'}</span>
-            <span className="text-emerald-500">•</span>
-            <span>100/100 A</span>
+            <span>{status}</span>
           </div>
         </div>
       </CardHeader>
@@ -516,65 +444,53 @@ function RoiCard({
           <div className="rounded-lg border border-indigo-500/20 bg-black/30 p-3">
             <div className="flex items-center justify-between">
               <p className="text-[11px] text-muted-foreground">
-                {isRobustness
-                  ? (lang === 'fr' ? 'Couverture Instructions' : 'Instruction Coverage')
-                  : t('roi_tokens_per_prompt')}
+                {fr ? 'Instructions avant / proposition' : 'Instructions before / proposed'}
               </p>
-              <Badge variant="outline" className={`font-mono text-[10px] ${isRobustness ? 'border-emerald-500/40 text-emerald-300' : 'border-indigo-500/40 text-indigo-300'}`}>
-                {isRobustness
-                  ? (lang === 'fr' ? '100/100 A · Certifié' : '100/100 A · Certified')
-                  : isAlreadyOptimized ? 'Active · 100/100 A' : pctSavings > 0 ? `-${pctSavings}%` : 'Standardized'}
+              <Badge variant="outline" className="font-mono text-[10px] border-indigo-500/40 text-indigo-300">
+                {fr ? 'Estimation' : 'Estimate'}
               </Badge>
             </div>
             <p className="mt-1.5 font-mono text-base font-semibold text-zinc-100">
-              {delta > 0 ? (
-                <>~{currentTokens} <span className="text-muted-foreground text-xs">→</span> <span className="text-emerald-400">~{proposedTokens} tokens</span></>
-              ) : isRobustness ? (
-                <>~{currentTokens} <span className="text-muted-foreground text-xs">→</span> <span className="text-indigo-300">~{proposedTokens} tokens</span></>
-              ) : (
-                <span className="text-emerald-400 font-mono">~{currentTokens} tokens</span>
-              )}
+              ~{before} <span className="text-muted-foreground text-xs">→</span> ~{after} tokens
             </p>
             <p className="mt-1 text-[10px] text-emerald-400 font-medium">
-              {isRobustness
-                ? (lang === 'fr' ? `+${Math.max(0, proposedTokens - currentTokens)} tok (couverture 100% sans commande fantôme)` : `+${Math.max(0, proposedTokens - currentTokens)} tok (100% coverage, 0 phantom commands)`)
-                : isAlreadyOptimized
-                ? `✨ ${t('roi_compact_context')}`
-                : delta > 0 ? `-${delta} tokens / prompt` : t('roi_compact_context')}
+              {fr ? 'Variation de taille : ' : 'Size change: '}{delta > 0 ? '+' : ''}{delta} tokens
             </p>
           </div>
 
           <div className="rounded-lg border border-indigo-500/20 bg-black/30 p-3">
             <div className="flex items-center justify-between">
               <p className="text-[11px] text-muted-foreground">
-                {lang === 'fr' ? 'Boucles d’Échec Évitées' : 'Avoided Failure Loops'}
+                {fr ? 'Score des constats' : 'Findings score'}
               </p>
               <span className="text-[10px] font-mono text-emerald-300 bg-emerald-950/60 px-1.5 py-0.5 rounded border border-emerald-500/30">
-                ~540k tok/m
+                {audit.scores.correctedGrade}
               </span>
             </div>
             <p className="mt-1.5 font-mono text-base font-semibold text-emerald-300">
-              {lang === 'fr' ? '0 retry infructueux' : '0 failed retries'}
+              {audit.scores.correctedScore}/100
             </p>
             <p className="mt-1 text-[10px] text-emerald-400 font-medium">
-              {lang === 'fr' ? 'Commandes réelles testées et prouvées' : 'Real commands verified & proven'}
+              {audit.findings.length} {fr ? 'constat(s) dans les instructions actuelles' : 'finding(s) in current instructions'}
             </p>
           </div>
 
           <div className="rounded-lg border border-indigo-500/20 bg-black/30 p-3">
             <div className="flex items-center justify-between">
               <p className="text-[11px] text-muted-foreground">
-                {lang === 'fr' ? 'Fiabilité & Isolation Git' : 'Reliability & Git Isolation'}
+                {fr ? 'Vérification des commandes' : 'Command verification'}
               </p>
-              <Badge variant="success" className="text-[10px]">
-                {lang === 'fr' ? '100% Sûr' : '100% Safe'}
+              <Badge variant="outline" className="text-[10px]">
+                {passed}/{payload.state.validationPlan.length}
               </Badge>
             </div>
             <p className="mt-1.5 font-mono text-base font-semibold text-teal-300">
-              {lang === 'fr' ? 'Worktree Étanche' : 'Isolated Worktree'}
+              {fr ? 'Commandes réussies' : 'Commands passed'}
             </p>
             <p className="mt-1 text-[10px] text-zinc-400">
-              {lang === 'fr' ? 'Branche principale protégée jusqu’à validation' : 'Main branch untouched until verified'}
+              {payload.state.validationPlan.length === 0
+                ? (fr ? 'Aucune commande planifiée' : 'No commands planned')
+                : results.length === 0 ? (fr ? 'Aucun résultat enregistré' : 'No results recorded') : status}
             </p>
           </div>
         </div>
@@ -825,7 +741,7 @@ function Application({
                 <span className="text-xs text-gray-400">anomalies</span>
               </div>
               <div className="mt-2 text-xs text-indigo-400/90 font-medium">
-                0 régression dans le projet
+                {snapshot?.findings?.remainingCount ?? '—'} constat(s) restant(s)
               </div>
             </div>
 
@@ -833,12 +749,12 @@ function Application({
               <div className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">Contrôles Validés</div>
               <div className="mt-1.5 flex items-baseline gap-2">
                 <span className="text-3xl font-extrabold text-emerald-400">
-                  {snapshot?.commands?.passed ?? snapshot?.commands?.total ?? 9}
+                  {snapshot?.commands?.passed ?? 0}
                 </span>
-                <span className="text-xs text-gray-400">/ {snapshot?.commands?.total ?? 9}</span>
+                <span className="text-xs text-gray-400">/ {snapshot?.commands?.total ?? 0}</span>
               </div>
               <div className="mt-2 text-xs text-gray-400">
-                100% verts en Twin Git isolé
+                {snapshot?.commands?.total ? 'Résultats enregistrés dans le Twin' : 'Aucune commande applicative exécutée'}
               </div>
             </div>
 
@@ -855,7 +771,7 @@ function Application({
 
           <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-gray-800/80">
             <div className="flex items-center gap-2">
-              <span className="text-xs text-muted-foreground">Fichiers certifiés :</span>
+              <span className="text-xs text-muted-foreground">Fichiers appliqués :</span>
               <Badge variant="outline" className="font-mono text-xs text-emerald-300 border-emerald-500/30 bg-emerald-950/20">AGENTS.md</Badge>
               <Badge variant="outline" className="font-mono text-xs text-emerald-300 border-emerald-500/30 bg-emerald-950/20">agent-ready.json</Badge>
             </div>
@@ -864,7 +780,7 @@ function Application({
             </div>
           </div>
 
-          <CollapsibleSection title="Voir le diff certifié appliqué">
+          <CollapsibleSection title="Voir le diff appliqué">
             <pre className="scrollbar-thin max-h-[520px] overflow-auto whitespace-pre-wrap rounded-md bg-black/40 p-4 font-mono text-xs text-gray-300">
               {diff || 'Diff appliqué avec succès.'}
             </pre>

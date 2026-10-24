@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import crypto from 'node:crypto';
 import path from 'node:path';
 import os from 'node:os';
-import { execFileSync } from 'node:child_process';
+import { runGit } from '../git.js';
 import { GeneratedRecipe } from '../generator/recipe-agents-md.js';
 
 export interface TwinResult {
@@ -29,14 +29,6 @@ function twinsBaseDir(): string {
 
 function manifestPath(): string {
   return path.join(twinsBaseDir(), 'manifest.json');
-}
-
-function runGit(repoPath: string, args: string[]): string {
-  return execFileSync('git', ['-C', repoPath, ...args], {
-    encoding: 'utf-8',
-    stdio: ['ignore', 'pipe', 'pipe'],
-    maxBuffer: 128 * 1024 * 1024,
-  });
 }
 
 function assertGitRepository(repoPath: string): void {

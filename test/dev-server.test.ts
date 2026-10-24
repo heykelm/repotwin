@@ -8,8 +8,10 @@ import { execFileSync } from 'node:child_process';
 
 it('binds loopback, blocks unauthenticated and cross-origin writes, escapes HTML and survives invalid reports', async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'rt-http-'));
-  const report = path.join(dir, 'report.json');
+  fs.mkdirSync(path.join(dir, '.repotwin'));
+  const report = path.join(dir, '.repotwin', 'input-report.json');
   fs.writeFileSync(report, '[]');
+  fs.writeFileSync(path.join(dir, 'implementation.txt'), 'original');
   fs.writeFileSync(path.join(dir, 'GEMINI.md'), 'Use `npm run obsolete`.');
   fs.writeFileSync(path.join(dir, 'package.json'), JSON.stringify({
     name: '<script>evil()</script>',
@@ -101,6 +103,11 @@ it('binds loopback, blocks unauthenticated and cross-origin writes, escapes HTML
       expect(restoredState.state.step).toBe('verified');
       expect(restoredState.state.commandResults).toHaveLength(1);
       expect(restoredState.state.commandResults[0].output).toContain('fixture passed');
+      fs.writeFileSync(path.join(dir, 'implementation.txt'), 'changed after verification');
+      const drifted = await (await post('apply')).json() as { ok: boolean; error: string };
+      expect(drifted.ok).toBe(false);
+      expect(drifted.error).toContain('Source repository changed');
+      fs.writeFileSync(path.join(dir, 'implementation.txt'), 'original');
       const applied = await post('apply');
       const payload = await applied.json() as { ok: boolean; backupDir: string };
       expect(payload.ok).toBe(true);

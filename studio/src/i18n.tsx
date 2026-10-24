@@ -78,9 +78,10 @@ export const translations = {
     verify_blocked_desc: '{passed}/{total} commands passed. Use preformatted prompts below each check to guide your AI agent in fixing issues.',
 
     // Application & Certificate
-    app_certified_title: 'Applied Files & Certified Snapshot',
-    app_certified_badge: 'Optimization & Deployment Certificate',
-    app_certified_desc: 'Optimal instruction configuration applied to {repo}. A tamper-proof backup and verification proof have been saved.',
+    diag_committed_scope: 'Local changes detected. Checks run against committed HEAD; uncommitted application files are excluded. Commit the code you want to verify before creating a Twin.',
+    app_certified_title: 'Applied Files & Verification Report',
+    app_certified_badge: 'Recorded application',
+    app_certified_desc: 'Instructions applied to {repo}. The local backup, reviewed diff and recorded command results are available below.',
     app_open_html: 'Open HTML Certificate',
     app_download_json: 'Audit JSON',
     app_before_after: 'Before / After Evolution',
@@ -173,9 +174,10 @@ export const translations = {
     verify_blocked_desc: '{passed}/{total} commande(s) réussie(s). Utilisez les prompts préformatés sous chaque contrôle pour guider votre agent IA dans la réparation.',
 
     // Application & Certificate
-    app_certified_title: 'Fichiers Appliqués & Snapshot Figé',
-    app_certified_badge: 'Certificat d’Optimisation & Déploiement',
-    app_certified_desc: 'La configuration optimale a été appliquée sur votre projet {repo}. Une sauvegarde locale et un certificat de preuve ont été générés.',
+    diag_committed_scope: 'Modifications locales détectées. Les commandes vérifient le commit HEAD ; les fichiers applicatifs non commités sont exclus. Commitez le code à vérifier avant de créer un Twin.',
+    app_certified_title: 'Fichiers appliqués et rapport de vérification',
+    app_certified_badge: 'Application enregistrée',
+    app_certified_desc: 'Instructions appliquées au projet {repo}. La sauvegarde locale, le diff et les résultats des commandes sont disponibles ci-dessous.',
     app_open_html: 'Ouvrir le Certificat HTML',
     app_download_json: 'Audit JSON',
     app_before_after: 'Évolution Avant / Après',

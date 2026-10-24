@@ -1,21 +1,28 @@
 # RepoTwin
 
-### **Stop burning your AI developer quotas on phantom commands and broken context.**
+### Inspect repository instructions and verify proposed changes in Git worktrees.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Node](https://img.shields.io/badge/node-%3E%3D22.12-brightgreen.svg)](package.json)
 [![OS](https://img.shields.io/badge/os-macOS%20%7C%20Windows%20%7C%20Linux-blue.svg)](#cross-platform--resource-efficiency)
 [![Security: Isolated Twins](https://img.shields.io/badge/security-isolated%20twins-emerald.svg)](SECURITY.md)
 
-**RepoTwin** protects your AI coding subscriptions (Cursor Pro, Claude Code, Gemini Antigravity, GitHub Copilot, Codex) by ensuring your AI agents never waste tokens on hallucinated commands, bloated instruction files, or infinite failure loops.
+**RepoTwin** helps developers maintain repository instructions for AI coding assistants. It inventories projects, checks instruction references and declared commands, and proposes an updated `AGENTS.md` and `agent-ready.json` while preserving custom directives.
 
-It empirically audits repository-local instructions (`AGENTS.md`, `.cursorrules`, `.claude/rules`), verifies real builds and tests in **isolated Git Twins** with parallel subproject workers, calculates hard dollar savings against your AI plans, and generates tamper-proof **Optimization & Deployment Certificates**.
+After command authorization, RepoTwin runs declared checks in a separate Git worktree and records results, durations, instruction findings and the applied diff. Scores describe the checks performed; AI usage, financial savings and assistant behavior are not measured. Reports are local records, not signed or tamper-proof certificates.
 
 > 🌐 **Bilingual Studio UI & Certificates**: English by default for open-source teams worldwide, with an instant `[ EN | FR ]` switcher in both the Studio and generated HTML certificates that persists user preferences across reloads.
 
 ## Quickstart
 
-Requires Node.js 22.12 or newer and Git. Build and install locally:
+Requires Node.js 22.12 or newer and Git. Install the published CLI:
+
+```bash
+npm install --global repotwin@latest
+repotwin /path/to/any-project
+```
+
+To develop RepoTwin locally:
 
 ```bash
 npm ci
@@ -37,9 +44,9 @@ The Studio opens on `http://127.0.0.1:<port>` with loopback-only isolation. It u
 
 RepoTwin is engineered for reliable execution across all major platforms with minimal resource consumption:
 
-- **Cross-Platform Compatibility**: Fully supported on **macOS**, **Windows 10/11**, and **Linux**. On Windows, package managers (`npm.cmd`, `pnpm.cmd`, `yarn.cmd`, `npx.cmd`) and path conventions (`\` and `%APPDATA%`) are resolved automatically without requiring WSL or external shells.
-- **Ultra-Low Memory Footprint**: RepoTwin's server and studio consume less than **60 MB of RAM** at runtime. The compiled Studio UI is under **300 KB gzipped** and served loopback-only (`127.0.0.1`).
-- **Bounded Log Buffers (Anti-OOM)**: Test and build outputs are capped via ring buffers (`maxOutputBytes = 10 MB`). Even verbose suites generating gigabytes of logs will never cause Node.js out-of-memory errors.
+- **Platforms**: CI runs on Linux with Node.js 22 and 24; local release verification also uses macOS. Windows paths and command names are handled in code, but Windows execution is not covered by the current CI matrix.
+- **Local UI**: Compiled React assets are served from the installed package on `127.0.0.1`. No hosted application or AI API key is needed.
+- **Bounded command output**: Captured stdout/stderr defaults to 64 KiB per command. Truncation is reported explicitly.
 - **Bounded Concurrency**: Subproject checks default to 3 concurrent workers (`REPOTWIN_CONCURRENCY=3`), preventing CPU and RAM exhaustion on large monorepos with dozens of projects.
 - **Disk-Efficient Git Twins**: Twins leverage `git worktree add`, sharing Git object storage with your primary repository without duplicating repository history. All temporary twins are cleanly removed upon completion.
 
@@ -136,9 +143,9 @@ For monorepos and multi-project repositories, RepoTwin accelerates verification 
 
 ### Application Snapshot & Verification Proof
 
-When verified instructions are applied locally, RepoTwin produces an immutable audit snapshot:
-- **Certified HTML & JSON Reports**: Saved under `.repotwin/reports/repotwin-certificate-<timestamp>.html` (and mirrored at `repotwin-certificate-latest.html`), providing a permanent record of before/after scores, resolved anomalies, and executed validation commands.
-- **Before / After Comparison**: Captures instruction health score improvements, token economy savings, and execution timings for every test command.
+When verified instructions are applied locally, RepoTwin produces a recorded audit snapshot:
+- **HTML & JSON reports**: Saved under `.repotwin/reports/` with timestamped unique names and backwards-compatible `repotwin-certificate-latest` aliases. Reports include before/after findings, executed validation commands and the source commit/fingerprint.
+- **Before / After Comparison**: Captures instruction scores, estimated instruction size, and execution timings. It does not infer AI usage savings.
 - **Controlled Backup**: Original files are backed up to a dedicated folder under `.repotwin/backups/` before any change is written.
 
 
@@ -154,12 +161,17 @@ coverage before enabling application. A candidate-only failure is never labelled
 pre-existing without an actual reference comparison. Local source changes and
 untracked or ignored environment files are not automatically synchronized into
 the candidate. Estimates of instruction size use characters divided by four;
-## Dual-Mode ROI & Token Economy
+## Recorded Results and Scope
 
-RepoTwin measures instruction value across two distinct optimization regimes:
+Studio shows current/proposed instruction sizes, the findings-based score and actual recorded command coverage. Size uses an approximate characters/4 estimate, not a model-specific tokenizer. Expanding useful instructions can increase this size.
 
-1. **Context Compression Mode** *(for bloated repositories)*: Measures direct tokens saved per AI agent query when verbose or redundant rules are streamlined, computing monthly/yearly dollar savings across popular subscriptions (Cursor Pro, Claude Pro, Gemini Advanced, ChatGPT Plus).
-2. **Robustness & Zero-Hallucination Mode** *(for underspecified repositories)*: When instructions must be expanded to document uncataloged subprojects and missing test/build scripts, RepoTwin guarantees **100/100 A health score with 0 phantom commands**. ROI is measured by eliminating costly agent retry loops (sparing ~50,000+ tokens of failed debug loops per month).
+Project discovery traverses up to eight levels, 2,500 directories and 200 projects, including nested projects below package boundaries. Dependency/build/cache directories are excluded. Reached limits and unreadable directories produce explicit findings instead of an implied complete inventory.
+
+Verification and application bind to a source fingerprint covering HEAD, staged/unstaged changes, untracked file content and initialized submodules. Changing the source invalidates the candidate. Commands still run against committed HEAD, not uncommitted application changes; commit intended code changes before creating a candidate when you want them included in the executed checks.
+
+Git hooks are disabled during RepoTwin-managed Git operations. Worktrees share Git object storage and run commands with the local user's permissions; they are not OS sandboxes. Use trusted repositories and review command scripts before authorizing execution.
+
+Local report paths reject symbolic links, non-regular files and hard-linked report targets. Report writes use private permissions and atomic replacement. Global archival is best-effort; the local report remains the primary record.
 
 ## Compare Two Commits
 

@@ -6,14 +6,22 @@ import { SubprojectInfo } from '../types/index.js';
 const IGNORED_DIRECTORIES = new Set([
   '.git', '.cache', '.idea', '.next', '.turbo', '.venv', 'build', 'coverage',
   'dist', 'node_modules', 'target', 'tmp', '.tmp', 'vendor',
-  'scratch', 'archive', 'output', 'outputs', 'fixtures', 'doc', 'docs'
+  'scratch', 'archive', 'output', 'outputs', 'fixtures', 'doc', 'docs',
+  '.repotwin', '.dart_tool', '.yarn', '.pnpm-store', '.gradle', 'Pods', '.pub-cache', '.symlinks', '.vercel'
 ]);
 
 /**
  * Discovers all subprojects and submodules in a repository.
  */
 export function discoverSubprojects(repoPath: string): SubprojectInfo[] {
+  return discoverProjectInventory(repoPath).projects;
+}
+
+export function discoverProjectInventory(repoPath: string): { projects: SubprojectInfo[]; notices: string[] } {
   const subprojects: SubprojectInfo[] = [];
+  const notices: string[] = [];
+  let directories = 0;
+  const notice = (message: string) => { if (!notices.includes(message)) notices.push(message); };
 
   // 1. Check .gitmodules
   const gitmodulesPath = path.join(repoPath, '.gitmodules');
@@ -80,20 +88,25 @@ export function discoverSubprojects(repoPath: string): SubprojectInfo[] {
   };
 
   const walk = (currentPath: string, relPath: string, depth: number): void => {
-    const isSubproject = inspect(currentPath, relPath);
-    
-    // Stop recursing if depth >= 2 or if we already identified this folder as a subproject/submodule (boundary)
-    if (depth >= 2) return;
-    if (relPath !== '.' && isSubproject) return;
+    if (++directories > 2500 || subprojects.length >= 200) {
+      notice('Project discovery limit reached; some directories were not inspected.');
+      return;
+    }
+    inspect(currentPath, relPath);
 
     let entries: fs.Dirent[];
     try {
       entries = fs.readdirSync(currentPath, { withFileTypes: true });
     } catch {
+      notice(`Cannot inspect project directory: ${relPath}`);
       return;
     }
     for (const entry of entries) {
       if (!entry.isDirectory() || entry.isSymbolicLink() || IGNORED_DIRECTORIES.has(entry.name)) continue;
+      if (depth >= 8) {
+        notice('Project discovery depth limit reached; some directories were not inspected.');
+        continue;
+      }
       const nextRelPath = relPath === '.' ? entry.name : path.join(relPath, entry.name);
       walk(path.join(currentPath, entry.name), nextRelPath, depth + 1);
     }
@@ -101,7 +114,7 @@ export function discoverSubprojects(repoPath: string): SubprojectInfo[] {
 
   walk(repoPath, '.', 0);
 
-  return subprojects;
+  return { projects: subprojects, notices };
 }
 
 /**

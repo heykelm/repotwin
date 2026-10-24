@@ -43,3 +43,29 @@ it('retains ordinary projects alongside declared submodules', () => {
   }
   expect(discoverSubprojects(dir).map(project => project.relPath).sort()).toEqual(['.', 'app', 'library']);
 });
+
+it('refreshes managed configuration while preserving custom values and safety paths', () => {
+  const dir = fixture();
+  fs.writeFileSync(path.join(dir, 'package.json'), JSON.stringify({ name: 'current', scripts: { test: 'node check.cjs' } }));
+  fs.writeFileSync(path.join(dir, 'agent-ready.json'), JSON.stringify({
+    custom: { keep: true }, projects: [{ name: 'removed', path: 'deleted' }],
+    verification: { deleted: ['npm run nonexistent'] }, safety: { custom: true, protectedPaths: ['private/'] }
+  }));
+  const recipe = generateOptimizationRecipe(dir, discoverSubprojects(dir), []);
+  const config = JSON.parse(recipe.agentReadyJsonContent);
+  expect(config.projects).toEqual([expect.objectContaining({ name: 'current', path: '.' })]);
+  expect(config.verification).toEqual({ '.': ["cd '.' && npm run test"] });
+  expect(config.custom).toEqual({ keep: true });
+  expect(config.safety.protectedPaths).toContain('private/');
+  expect(config.safety.protectedPaths).toContain('*.key');
+  expect(config.safety.custom).toBe(true);
+});
+
+it('discovers nested projects even below a package boundary', () => {
+  const dir = fixture();
+  for (const relative of ['domains/payments', 'domains/payments/api']) {
+    fs.mkdirSync(path.join(dir, relative), { recursive: true });
+    fs.writeFileSync(path.join(dir, relative, 'package.json'), JSON.stringify({ name: relative }));
+  }
+  expect(discoverSubprojects(dir).map(project => project.relPath)).toEqual(['domains/payments', 'domains/payments/api']);
+});

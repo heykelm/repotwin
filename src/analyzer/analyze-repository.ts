@@ -1,4 +1,4 @@
-import { discoverSubprojects, buildFileIndex, discoverKnownTables } from './subproject-scanner.js';
+import { discoverProjectInventory, buildFileIndex, discoverKnownTables } from './subproject-scanner.js';
 import { scanRules } from './rules-scanner.js';
 import { parseAgentReport } from './report-parser.js';
 import { disambiguateFinding } from '../diagnostics/disambiguator.js';
@@ -7,7 +7,8 @@ import { generateOptimizationRecipe } from '../generator/recipe-agents-md.js';
 import { auditInstructions } from './instruction-audit.js';
 
 export function analyzeRepository(repoPath: string, reportPath?: string) {
-  const subprojects = discoverSubprojects(repoPath);
+  const projectDiscovery = discoverProjectInventory(repoPath);
+  const subprojects = projectDiscovery.projects;
   const fileSet = buildFileIndex(repoPath, subprojects);
   const rules = scanRules(repoPath);
   const knownTables = discoverKnownTables(repoPath, fileSet);
@@ -16,6 +17,7 @@ export function analyzeRepository(repoPath: string, reportPath?: string) {
   return {
     repoPath,
     subprojects,
+    projectDiscovery: { notices: projectDiscovery.notices, complete: projectDiscovery.notices.length === 0 },
     findings,
     processed,
     falsePositives: processed.filter(f => f.isFalsePositive),

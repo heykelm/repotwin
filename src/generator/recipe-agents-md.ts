@@ -91,6 +91,7 @@ ${subprojectRows}
   const existingConfig = fs.existsSync(configPath) ? JSON.parse(fs.readFileSync(configPath, 'utf-8')) : {};
   if (!existingConfig || typeof existingConfig !== 'object' || Array.isArray(existingConfig)) throw new Error('agent-ready.json must contain an object');
   const agentReadyConfig = {
+    ...existingConfig,
     $schema: "https://agent-ready.dev/schema.json",
     version: "1.0",
     monorepo: subprojects.length > 1,
@@ -107,13 +108,15 @@ ${subprojectRows}
       return commands.length ? [[s.relPath, commands.map(command => `cd '${s.relPath.replace(/'/g, "'\\''")}' && ${command}`)]] : [];
     })),
     safety: {
-      protectedPaths: [
+      ...(existingConfig.safety && typeof existingConfig.safety === 'object' && !Array.isArray(existingConfig.safety) ? existingConfig.safety : {}),
+      protectedPaths: [...new Set([
         ".env*",
         "*.p8",
-        "*.pem"
-      ]
-    },
-    ...existingConfig
+        "*.pem",
+        "*.key",
+        ...(Array.isArray(existingConfig.safety?.protectedPaths) ? existingConfig.safety.protectedPaths.filter((value: unknown) => typeof value === 'string') : [])
+      ])]
+    }
   };
 
   const agentReadyJsonContent = JSON.stringify(agentReadyConfig, null, 2);

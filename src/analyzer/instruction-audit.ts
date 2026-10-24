@@ -3,6 +3,7 @@ import path from 'node:path';
 import { RawFinding, SubprojectInfo } from '../types/index.js';
 import { calculateScores } from '../diagnostics/score.js';
 import { auditInstructionConsistency } from './instruction-consistency.js';
+import { discoverProjectInventory } from './subproject-scanner.js';
 
 /** A fresh, narrowly scoped audit of instruction files, not of application correctness. */
 export function auditInstructions(repoPath: string, projects: SubprojectInfo[]) {
@@ -33,6 +34,8 @@ export function auditInstructions(repoPath: string, projects: SubprojectInfo[]) 
     add('invalid-agent-config', 'agent-ready.json', 'Agent configuration is missing or is not a JSON object.');
   }
   const consistency = auditInstructionConsistency(repoPath);
+  const discoveryNotices = discoverProjectInventory(repoPath).notices;
+  for (const notice of discoveryNotices) add('project-discovery-incomplete', 'project inventory', notice);
   findings.push(...consistency.findings);
   const scores = calculateScores(findings.map(raw => ({ raw, classification: 'UNKNOWN' as const, isFalsePositive: false, confidence: 1, explanation: raw.message })), true);
   return { scope: 'instruction-files' as const, findings, scores, consistency, testsExecuted: false as const };

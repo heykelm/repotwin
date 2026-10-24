@@ -80,6 +80,15 @@ describe('RepoTwin MCP safety workflow', () => {
     expect(wrongToken.isError).toBe(true);
     expect(fs.existsSync(path.join(repo, 'AGENTS.md'))).toBe(false);
 
+    fs.writeFileSync(path.join(repo, 'README.md'), 'changed after verification');
+    const drifted = await client.callTool({
+      name: 'repotwin_apply_fix',
+      arguments: { candidateId: created.candidateId, verificationToken: verified.verificationToken, confirmApply: true }
+    });
+    expect(drifted.isError).toBe(true);
+    expect(payload(drifted).error).toContain('Source repository changed');
+    fs.writeFileSync(path.join(repo, 'README.md'), '# fixture\n');
+
     const applied = payload(await client.callTool({
       name: 'repotwin_apply_fix',
       arguments: {

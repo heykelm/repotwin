@@ -20,10 +20,14 @@ import { buildValidationPlan, runValidationPlan, validationConsentToken, Validat
 import { saveApplicationSnapshot, ApplicationSnapshot } from '../report/application-snapshot.js';
 import { SubprojectInfo } from '../types/index.js';
 import { REPOTWIN_VERSION } from '../version.js';
+import { captureSourceState, assertSourceUnchanged, SourceState } from '../verification/source-state.js';
+import { prepareReportStorage } from '../report/safe-storage.js';
+import { compareInstructionAudits, allCommandsPassed } from '../verification/candidate-assessment.js';
 
 interface McpCandidate {
   id: string;
   repoPath: string;
+  sourceState: SourceState;
   recipe: GeneratedRecipe;
   twin: TwinResult;
   projects: SubprojectInfo[];
@@ -38,6 +42,7 @@ interface McpCandidate {
     grade: string;
     resolved: Array<{ message: string }>;
     introduced: number;
+    remaining: number;
     durationMs: number;
   };
 }
@@ -225,6 +230,8 @@ export function createMcpServer(defaultRepoPath: string = process.cwd()): Server
                     buildCommand: s.buildScript || null,
                   })),
                   scores: analysis.scores,
+                  instructionAudit: analysis.instructionAudit,
+                  projectDiscovery: analysis.projectDiscovery,
                   proposedChangesSummary: analysis.recipe.summaryChanges,
                 }, null, 2)
               }
@@ -234,6 +241,7 @@ export function createMcpServer(defaultRepoPath: string = process.cwd()): Server
 
         case 'repotwin_create_twin': {
           const repo = resolvePath(requiredString(args, 'repoPath'));
+          const sourceState = captureSourceState(repo);
           const subprojects = discoverSubprojects(repo);
           const before = auditInstructions(repo, subprojects);
           const recipe = generateOptimizationRecipe(repo, subprojects, []);
@@ -244,6 +252,7 @@ export function createMcpServer(defaultRepoPath: string = process.cwd()): Server
           candidates.set(candidateId, {
             id: candidateId,
             repoPath: repo,
+            sourceState,
             recipe,
             twin,
             projects: subprojects,
@@ -261,6 +270,9 @@ export function createMcpServer(defaultRepoPath: string = process.cwd()): Server
                 text: JSON.stringify({
                   success: true,
                   candidateId,
+                  sourceCommit: sourceState.commit,
+                  sourceHasUncommittedChanges: sourceState.hasUncommittedChanges,
+                  executionScope: 'committed-HEAD; uncommitted application files are not copied',
                   twinPath: twin.twinPath,
                   branchName: twin.branchName,
                   filesModified: twin.filesModified,
@@ -283,6 +295,7 @@ export function createMcpServer(defaultRepoPath: string = process.cwd()): Server
           const candidate = getCandidate(args);
           candidate.verified = false;
           candidate.verificationToken = undefined;
+          assertSourceUnchanged(candidate.repoPath, candidate.sourceState);
           if (!candidateIsIntact(candidate.repoPath, candidate.twin)) {
             throw new Error('Candidate changed before verification. Create a new twin.');
           }
@@ -304,13 +317,9 @@ export function createMcpServer(defaultRepoPath: string = process.cwd()): Server
 
           const startedAt = Date.now();
           const after = auditInstructions(candidate.twin.twinPath, candidate.projects);
-          const introduced = after.findings.filter(finding => !candidate.before.findings.some(previous =>
-            previous.file === finding.file && previous.rule === finding.rule && previous.message === finding.message
-          ));
-          const resolved = candidate.before.findings.filter(previous => !after.findings.some(finding =>
-            previous.file === finding.file && previous.rule === finding.rule && previous.message === finding.message
-          ));
+          const { introduced, resolved } = compareInstructionAudits(candidate.before, after);
           const targetResults = await runValidationPlan(candidate.twin.twinPath, planToRun);
+          assertSourceUnchanged(candidate.repoPath, candidate.sourceState);
           if (planToRun.length < candidate.validationPlan.length && candidate.commandResults.length > 0) {
             const byId = new Map(candidate.commandResults.map(result => [result.id, result]));
             for (const result of targetResults) byId.set(result.id, result);
@@ -328,14 +337,14 @@ export function createMcpServer(defaultRepoPath: string = process.cwd()): Server
             cleanupError = error instanceof Error ? error.message : String(error);
           }
           const candidateIntact = candidateIsIntact(candidate.repoPath, candidate.twin);
-          const commandsPassed = candidate.commandResults.length === candidate.validationPlan.length &&
-            candidate.validationPlan.every(command => candidate.commandResults.some(result => result.id === command.id && result.status === 'passed'));
+          const commandsPassed = allCommandsPassed(candidate.validationPlan, candidate.commandResults);
           candidate.verified = commandsPassed && candidateIntact && !cleanupError && introduced.length === 0;
           candidate.verification = {
             score: after.scores.correctedScore,
             grade: after.scores.correctedGrade,
             resolved: resolved.map(finding => ({ message: finding.message })),
             introduced: introduced.length,
+            remaining: after.findings.length,
             durationMs: Date.now() - startedAt
           };
           if (candidate.verified) candidate.verificationToken = crypto.randomBytes(32).toString('hex');
@@ -385,6 +394,7 @@ export function createMcpServer(defaultRepoPath: string = process.cwd()): Server
           if (!candidate.verified || typeof args.verificationToken !== 'string' || args.verificationToken !== candidate.verificationToken) {
             throw new Error('A successful current verification token is required before applying.');
           }
+          assertSourceUnchanged(candidate.repoPath, candidate.sourceState);
           if (!candidateIsIntact(candidate.repoPath, candidate.twin)) throw new Error('Candidate changed after verification.');
           const agentsPath = path.join(candidate.twin.twinPath, 'AGENTS.md');
           const readyPath = path.join(candidate.twin.twinPath, 'agent-ready.json');
@@ -407,6 +417,7 @@ export function createMcpServer(defaultRepoPath: string = process.cwd()): Server
           const selectedTools = Array.isArray(args.selectedTools)
             ? args.selectedTools.filter((item): item is string => typeof item === 'string')
             : [];
+          prepareReportStorage(repo);
           const backupDir = applyRecipe(repo, candidate.recipe);
           candidate.verified = false;
           candidate.verificationToken = undefined;
@@ -421,7 +432,8 @@ export function createMcpServer(defaultRepoPath: string = process.cwd()): Server
             repoPath: fs.realpathSync(repo),
             repoName: path.basename(repo),
             backupDir,
-            baseCommit: candidate.twin.branchName,
+            baseCommit: candidate.sourceState.commit,
+            sourceFingerprint: candidate.sourceState.fingerprint,
             scores: {
               before: {
                 score: candidate.before.scores.correctedScore,
@@ -435,7 +447,7 @@ export function createMcpServer(defaultRepoPath: string = process.cwd()): Server
             findings: {
               resolvedCount: candidate.verification!.resolved.length,
               resolved: candidate.verification!.resolved,
-              remainingCount: candidate.verification!.introduced
+              remainingCount: candidate.verification!.remaining
             },
             commands: {
               total: candidate.validationPlan.length,
@@ -456,11 +468,8 @@ export function createMcpServer(defaultRepoPath: string = process.cwd()): Server
               percentSaved: currentTokens > 0 ? Math.round((tokensSaved / currentTokens) * 100) : 0,
               totalOriginalTokens: currentTokens,
               totalOptimizedTokens: proposedTokens,
-              estimatedQueriesPerMonth: 900,
-              monthlySavedTokens: tokensSaved * 900,
-              yearlySavedTokens: tokensSaved * 900 * 12,
-              monthlySavingsUsd: Number(((tokensSaved * 900 / 1_000_000) * 3).toFixed(2)),
-              yearlySavingsUsd: Number(((tokensSaved * 900 * 12 / 1_000_000) * 3).toFixed(2))
+              measurement: 'instruction-size-estimate',
+              usageMeasured: false
             },
             filesApplied: ['AGENTS.md', 'agent-ready.json'],
             diff: candidate.twin.diff ?? ''

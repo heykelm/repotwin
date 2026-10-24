@@ -3,6 +3,7 @@ import path from 'node:path';
 import os from 'node:os';
 import crypto from 'node:crypto';
 import { execFileSync } from 'node:child_process';
+import { ensureSafeDirectory, prepareReportStorage, assertSafeReportFile, writeReportAtomically } from './safe-storage.js';
 
 export interface ApplicationSnapshot {
   id: string;
@@ -12,6 +13,7 @@ export interface ApplicationSnapshot {
   repoName: string;
   backupDir: string;
   baseCommit?: string;
+  sourceFingerprint?: string;
   scores: {
     before: { score: number; grade: string };
     after: { score: number; grade: string };
@@ -34,6 +36,8 @@ export interface ApplicationSnapshot {
     }>;
   };
   tokenEconomy?: {
+    measurement?: 'instruction-size-estimate';
+    usageMeasured?: boolean;
     selectedTools?: string[];
     tokensSavedPerQuery?: number;
     totalTokensSaved?: number;
@@ -82,99 +86,83 @@ export function generateCertificateHtml(snapshot: ApplicationSnapshot, initialLa
     `).join('')
     : '<p class="text-xs text-gray-500 italic" data-i18n="no_findings">No prior anomalies.</p>';
 
-  const te = snapshot.tokenEconomy;
-  const selectedTools = te?.selectedTools || [];
-  const toolLabels: Record<string, { label: string; plan: string }> = {
-    cursor: { label: 'Cursor Pro', plan: '20 $/m' },
-    claude: { label: 'Claude Pro / Code', plan: '20 $/m' },
-    gemini: { label: 'Gemini / Antigravity', plan: '20 $/m' },
-    openai: { label: 'ChatGPT Plus / Codex', plan: '20 $/m' },
-    copilot: { label: 'GitHub Copilot', plan: '10 $/m' },
-    api: { label: 'Pay-as-you-go API', plan: '~3 $/M' }
+  const origTokens = snapshot.tokenEconomy?.totalOriginalTokens;
+  const optTokens = snapshot.tokenEconomy?.totalOptimizedTokens;
+  const formatTokens = (value: number | undefined) =>
+    value !== undefined && Number.isFinite(value) && value >= 0
+      ? `~${value.toLocaleString('en-US')}`
+      : '<span data-i18n="not_recorded">Not recorded</span>';
+  const verificationKey = snapshot.commands.total === 0
+    ? 'verification_not_run'
+    : snapshot.commands.results.length === snapshot.commands.total && snapshot.commands.results.every(cmd => cmd.status === 'passed') && snapshot.commands.passed === snapshot.commands.total
+      ? 'verification_passed'
+      : 'verification_incomplete';
+  const verificationLabels = {
+    en: { verification_not_run: 'No commands recorded', verification_passed: 'All recorded commands passed', verification_incomplete: 'Failed or incomplete checks' },
+    fr: { verification_not_run: 'Aucune commande enregistrée', verification_passed: 'Toutes les commandes enregistrées ont réussi', verification_incomplete: 'Contrôles échoués ou incomplets' }
   };
-  const selectedToolsHtml = selectedTools.length > 0
-    ? `<div class="flex flex-wrap items-center gap-1.5 mt-2">
-        <span class="text-[11px] text-gray-400 font-medium" data-i18n="roi_configured_tools">Configured plans:</span>
-        ${selectedTools.map(t => `<span class="inline-flex items-center gap-1 rounded bg-indigo-500/20 px-2 py-0.5 text-[11px] font-semibold text-indigo-300 border border-indigo-500/30">✓ ${escapeHtml(toolLabels[t]?.label || t)} (${escapeHtml(toolLabels[t]?.plan || '')})</span>`).join('')}
-      </div>`
-    : '';
-
-  const tokensPerQuery = te?.tokensSavedPerQuery ?? te?.totalTokensSaved ?? 1850;
-  const percentSaved = te?.percentSaved ?? 76;
-  const origTokens = te?.totalOriginalTokens ?? 2450;
-  const optTokens = te?.totalOptimizedTokens ?? 600;
-  const queriesPerMonth = te?.estimatedQueriesPerMonth ?? 500;
-  const monthlyTokens = te?.monthlySavedTokens ?? (tokensPerQuery * queriesPerMonth);
-  const yearlyTokens = te?.yearlySavedTokens ?? (monthlyTokens * 12);
-  const monthlySavingsUsd = te?.monthlySavingsUsd ?? ((monthlyTokens / 1_000_000) * 3);
-  const yearlySavingsUsd = te?.yearlySavingsUsd ?? (monthlySavingsUsd * 12);
-
-  const cursorRoi = Math.round((monthlySavingsUsd / 20) * 100);
-
-  const isRobustnessMode = tokensPerQuery <= 0;
-  const loopAvoidanceTokensMonth = Math.round(queriesPerMonth * 0.10 * 6000);
-  const loopAvoidanceSavingsUsd = Number(((loopAvoidanceTokensMonth / 1_000_000) * 3).toFixed(2));
+  const verificationHtml = `<span data-i18n="${verificationKey}">${verificationLabels[initialLang][verificationKey]}</span>`;
 
   const tokensSectionHtml = `
-    <!-- Context Efficiency & Zero-Hallucination Metrics -->
+    <!-- Recorded instruction sizes and findings -->
     <section class="bg-gradient-to-br from-indigo-950/30 via-gray-900/40 to-background border border-indigo-500/30 rounded-2xl p-6">
       <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-5">
         <div>
           <div class="flex items-center gap-2">
             <span class="text-lg">🛡️</span>
-            <h2 class="text-base font-bold text-white tracking-tight" data-i18n="roi_title">Context Efficiency & Zero-Hallucination</h2>
+            <h2 class="text-base font-bold text-white tracking-tight" data-i18n="roi_title">Instructions and measured results</h2>
             <span class="text-[11px] font-mono px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-bold uppercase">
-              Deterministic & Verified
+              <span data-i18n="recorded_metrics">Recorded metrics</span>
             </span>
           </div>
-          <p class="text-xs text-gray-300 mt-1">
-            Optimized agent context covering repository architecture while strictly preventing hallucinated command retries.
+          <p class="text-xs text-gray-300 mt-1" data-i18n="measurement_limits">
+            Sizes are token estimates, not measured API usage. No monthly savings or guarantees of security or AI behavior.
           </p>
         </div>
         <div class="text-xs font-mono text-emerald-300 bg-emerald-950/60 px-3 py-1.5 rounded-lg border border-emerald-500/30 shrink-0">
-          Architecture 100% Covered · 100/100 A
+          ${verificationHtml}
         </div>
       </div>
 
       <!-- 4 Technical Metric Cards -->
       <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <div class="bg-gray-900/60 border border-gray-800 rounded-xl p-4">
-          <div class="text-[11px] font-semibold text-gray-400 uppercase tracking-wider">Context Budget</div>
+          <div class="text-[11px] font-semibold text-gray-400 uppercase tracking-wider" data-i18n="instructions_before">Instructions before</div>
           <div class="text-2xl font-bold text-indigo-300 mt-1.5 font-mono">
-            ~${optTokens.toLocaleString('en-US')} <span class="text-sm font-semibold text-indigo-300">tokens</span>
+            ${formatTokens(origTokens)}
           </div>
-          <div class="text-[11px] text-gray-400 mt-2">
-            Concise instruction set (0 context pollution)
+          <div class="text-[11px] text-gray-400 mt-2" data-i18n="estimated_tokens">
+            Estimated tokens
           </div>
         </div>
 
         <div class="bg-gray-900/60 border border-gray-800 rounded-xl p-4">
-          <div class="text-[11px] font-semibold text-gray-400 uppercase tracking-wider">Avoided Retries</div>
+          <div class="text-[11px] font-semibold text-gray-400 uppercase tracking-wider" data-i18n="instructions_after">Instructions after</div>
           <div class="text-2xl font-bold text-emerald-400 mt-1.5 font-mono">
-            ~${Math.round(loopAvoidanceTokensMonth / 1_000)}k <span class="text-xs text-gray-400 font-normal">tok / mo</span>
+            ${formatTokens(optTokens)}
           </div>
-          <div class="text-[11px] text-gray-500 mt-2">
-            0 failed runs on undocumented subprojects
+          <div class="text-[11px] text-gray-500 mt-2" data-i18n="estimated_tokens">
+            Estimated tokens
           </div>
         </div>
 
         <div class="bg-gray-900/60 border border-gray-800 rounded-xl p-4">
-          <div class="text-[11px] font-semibold text-gray-400 uppercase tracking-wider">Verified Commands</div>
+          <div class="text-[11px] font-semibold text-gray-400 uppercase tracking-wider" data-i18n="controls_passed_title">Recorded Checks</div>
           <div class="text-2xl font-bold text-emerald-300 mt-1.5 font-mono">
-            ${snapshot.commands.passed}/${snapshot.commands.total} <span class="text-xs text-gray-400 font-normal">passed</span>
+            ${snapshot.commands.passed}/${snapshot.commands.total} <span class="text-xs text-gray-400 font-normal" data-i18n="passed_suffix">passed</span>
           </div>
           <div class="text-[11px] text-gray-500 mt-2">
-            ${snapshot.findings.resolvedCount} finding(s) resolved · 0 regression
+            ${verificationHtml}
           </div>
         </div>
 
         <div class="bg-gray-900/60 border border-emerald-500/30 bg-emerald-950/20 rounded-xl p-4">
-          <div class="text-[11px] font-semibold text-emerald-300 uppercase tracking-wider">Safety & Stability</div>
+          <div class="text-[11px] font-semibold text-emerald-300 uppercase tracking-wider" data-i18n="remaining_findings">Remaining findings</div>
           <div class="text-2xl font-bold text-white mt-1.5 font-mono">
-            100 %
+            ${snapshot.findings.remainingCount}
           </div>
-          <div class="text-[11px] text-emerald-400 mt-2 font-medium">
-            Git worktree sandbox isolation active
+          <div class="text-[11px] text-emerald-400 mt-2 font-medium" data-i18n="findings_scope">
+            Findings-based score; not a security certification
           </div>
         </div>
       </div>
@@ -210,12 +198,12 @@ export function generateCertificateHtml(snapshot: ApplicationSnapshot, initialLa
             </div>
             <div>
               <div class="flex items-center gap-2">
-                <h1 class="text-2xl font-bold text-white tracking-tight" data-i18n="cert_title">Optimization & Deployment Certificate</h1>
+                <h1 class="text-2xl font-bold text-white tracking-tight" data-i18n="cert_title">Application Report</h1>
                 <span class="text-[11px] font-mono px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-bold uppercase" data-i18n="cert_official">
-                  Official & Verified
+                  Recorded snapshot
                 </span>
               </div>
-              <p class="text-xs text-gray-400 mt-0.5" data-i18n="cert_subtitle">Proof of test execution, compliance, and ROI audit generated by RepoTwin</p>
+              <p class="text-xs text-gray-400 mt-0.5" data-i18n="cert_subtitle">Recorded findings, instruction sizes and command results generated by RepoTwin</p>
             </div>
           </div>
         </div>
@@ -226,7 +214,7 @@ export function generateCertificateHtml(snapshot: ApplicationSnapshot, initialLa
             <button id="btn-fr" type="button" onclick="setCertLang('fr')" class="px-2.5 py-1 rounded transition-all text-gray-400 hover:text-white">FR</button>
           </div>
           <div class="text-xs font-mono text-gray-300 font-semibold">${escapeHtml(snapshot.appliedAtFormatted)}</div>
-          <div class="text-[11px] font-mono text-emerald-400" data-i18n="twin_isolated">Isolated Git Twin · 0 regression</div>
+          <div class="text-[11px] font-mono text-emerald-400">${verificationHtml}</div>
         </div>
       </div>
 
@@ -250,14 +238,14 @@ export function generateCertificateHtml(snapshot: ApplicationSnapshot, initialLa
       
       <!-- Score Evolution -->
       <div class="bg-gray-900/60 border border-emerald-500/30 p-5 rounded-2xl relative overflow-hidden backdrop-blur">
-        <div class="text-[11px] font-semibold uppercase tracking-wider text-emerald-400 mb-1" data-i18n="score_health_title">AI Health Score</div>
+        <div class="text-[11px] font-semibold uppercase tracking-wider text-emerald-400 mb-1" data-i18n="score_health_title">Findings Score</div>
         <div class="flex items-baseline gap-2 mt-2">
           <span class="text-4xl font-extrabold text-white tracking-tight">${snapshot.scores.after.score}</span>
           <span class="text-gray-500 text-xs">/ 100</span>
-          <span class="px-2 py-0.5 text-xs rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-bold ml-auto">${snapshot.scores.after.grade}</span>
+          <span class="px-2 py-0.5 text-xs rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-bold ml-auto">${escapeHtml(snapshot.scores.after.grade)}</span>
         </div>
         <div class="text-xs text-emerald-400/90 font-medium mt-3 flex items-center gap-1.5">
-          <span>↗</span> ${scoreDiffText} pts (<span data-i18n="score_initially">initially</span> ${snapshot.scores.before.score}/100 · ${snapshot.scores.before.grade})
+          ${scoreDiffText} pts (<span data-i18n="score_initially">initially</span> ${snapshot.scores.before.score}/100 · ${escapeHtml(snapshot.scores.before.grade)})
         </div>
       </div>
 
@@ -268,8 +256,8 @@ export function generateCertificateHtml(snapshot: ApplicationSnapshot, initialLa
           <span class="text-4xl font-extrabold text-white tracking-tight">${snapshot.findings.resolvedCount}</span>
           <span class="text-gray-500 text-xs" data-i18n="findings_count_suffix">resolved</span>
         </div>
-        <div class="text-xs text-indigo-400/90 font-medium mt-3" data-i18n="zero_regression">
-          0 regression introduced
+        <div class="text-xs text-indigo-400/90 font-medium mt-3">
+          ${snapshot.findings.remainingCount} <span data-i18n="remaining_findings">Remaining findings</span>
         </div>
       </div>
 
@@ -280,8 +268,8 @@ export function generateCertificateHtml(snapshot: ApplicationSnapshot, initialLa
           <span class="text-4xl font-extrabold text-emerald-400 tracking-tight">${snapshot.commands.passed}</span>
           <span class="text-gray-500 text-xs">/ ${snapshot.commands.total} <span data-i18n="passed_suffix">passed</span></span>
         </div>
-        <div class="text-xs text-gray-400 mt-3" data-i18n="success_twin">
-          100% success in isolated Twin
+        <div class="text-xs text-gray-400 mt-3">
+          ${verificationHtml}
         </div>
       </div>
 
@@ -307,7 +295,7 @@ export function generateCertificateHtml(snapshot: ApplicationSnapshot, initialLa
         <h2 class="text-base font-bold text-white flex items-center gap-2">
           <span>✓</span> <span data-i18n="table_title">Application Checks Proof</span> (${snapshot.commands.passed}/${snapshot.commands.total})
         </h2>
-        <span class="text-xs text-emerald-400 font-mono font-medium" data-i18n="table_subtitle">Executed without regression</span>
+        <span class="text-xs text-emerald-400 font-mono font-medium" data-i18n="table_subtitle">Recorded execution results</span>
       </div>
       <div class="overflow-x-auto rounded-xl border border-gray-800">
         <table class="w-full text-left border-collapse">
@@ -344,20 +332,20 @@ export function generateCertificateHtml(snapshot: ApplicationSnapshot, initialLa
     <section class="bg-gray-900/40 border border-gray-800/80 rounded-2xl p-6">
       <div class="flex items-center justify-between mb-4">
         <h2 class="text-base font-bold text-white flex items-center gap-2">
-          <span>📄</span> <span data-i18n="diff_title">Applied Files & Certified Diff</span>
+          <span>📄</span> <span data-i18n="diff_title">Applied Files & Recorded Diff</span>
         </h2>
         <div class="flex gap-2">
           ${snapshot.filesApplied.map(f => `<span class="px-2 py-0.5 rounded text-xs font-mono font-medium bg-gray-800 text-gray-200 border border-gray-700">${escapeHtml(f)}</span>`).join('')}
         </div>
       </div>
       <div class="bg-gray-950 rounded-xl p-4 border border-gray-800">
-        <pre class="text-xs text-gray-300 font-mono overflow-x-auto max-h-80 whitespace-pre-wrap"><code>${escapeHtml(snapshot.diff || 'Diff applied successfully.')}</code></pre>
+        <pre class="text-xs text-gray-300 font-mono overflow-x-auto max-h-80 whitespace-pre-wrap"><code>${escapeHtml(snapshot.diff)}</code></pre>
       </div>
     </section>
 
     <!-- Footer -->
     <footer class="text-center text-xs text-gray-600 pt-6 border-t border-gray-900 space-y-1">
-      <div>RepoTwin Certification Snapshot · <span data-i18n="footer_generated">Generated on</span> ${escapeHtml(snapshot.appliedAtFormatted)} · Audit ID: <span class="font-mono text-gray-500">${escapeHtml(snapshot.id)}</span></div>
+      <div>RepoTwin Snapshot · <span data-i18n="footer_generated">Generated on</span> ${escapeHtml(snapshot.appliedAtFormatted)} · Audit ID: <span class="font-mono text-gray-500">${escapeHtml(snapshot.id)}</span></div>
     </footer>
 
   </div>
@@ -366,42 +354,30 @@ export function generateCertificateHtml(snapshot: ApplicationSnapshot, initialLa
   <script>
     const certDict = {
       en: {
-        cert_title: "Optimization & Deployment Certificate",
-        cert_official: "Official & Verified",
-        cert_subtitle: "Proof of test execution, compliance, and ROI audit generated by RepoTwin",
-        twin_isolated: "Isolated Git Twin · 0 regression",
+        cert_title: "Application Report",
+        cert_official: "Recorded snapshot",
+        cert_subtitle: "Recorded findings, instruction sizes and command results generated by RepoTwin",
         audited_project: "Audited project:",
-        score_health_title: "AI Health Score",
+        score_health_title: "Findings Score",
         score_initially: "initially",
         findings_resolved_title: "Resolved Findings",
         findings_count_suffix: "resolved",
-        zero_regression: "0 regression introduced",
-        controls_passed_title: "Validated Checks",
+        controls_passed_title: "Recorded Checks",
         passed_suffix: "passed",
-        success_twin: "100% success in isolated Twin",
         local_backup_title: "Local Backup",
         restore_anytime: "Restoration available at any time",
-        roi_title: "Token Balance & AI Plan Profitability",
-        roi_badge_robustness: "Robustness & Zero-Hallucination",
-        roi_badge_measured: "Measured ROI",
-        roi_desc_robustness: "Instructions completed to cover architecture (+${Math.max(0, optTokens - origTokens)} tokens) and resolve ${snapshot.findings.resolvedCount} finding(s). Value is derived from preventing costly agent retry loops.",
-        roi_desc_compression: "Gains calculated from system prompt compression injected on every AI agent request.",
-        roi_configured_tools: "Configured plans:",
-        roi_size_title: "Controlled Size",
-        roi_coverage_full: "100% architecture coverage",
-        roi_loops_title: "Avoided Failure Loops",
-        roi_loops_desc: "0 failed retry loops on missing commands",
-        roi_reliability_title: "Validated Reliability",
-        roi_security_title: "Plan Protection",
-        roi_security_desc: "AI agent quotas preserved from failed runs",
-        roi_perspective: "Profitability perspective across AI development subscriptions:",
-        roi_status_perspective: "Status of your AI development subscriptions after optimization:",
-        roi_per_query_title: "Per Query / Task",
-        roi_monthly_title: "Monthly Savings",
-        roi_yearly_title: "Annual Savings",
-        roi_amortization_title: "Plan Amortization",
+        roi_title: "Instructions and measured results",
+        recorded_metrics: "Recorded metrics",
+        measurement_limits: "Sizes are token estimates, not measured API usage. No monthly savings or guarantees of security or AI behavior.",
+        instructions_before: "Instructions before",
+        instructions_after: "Instructions after",
+        estimated_tokens: "Estimated tokens",
+        not_recorded: "Not recorded",
+        remaining_findings: "Remaining findings",
+        findings_scope: "Findings-based score; not a security certification",
+        ...${JSON.stringify(verificationLabels.en)},
         table_title: "Application Checks Proof",
-        table_subtitle: "Executed without regression",
+        table_subtitle: "Recorded execution results",
         col_subproject: "Subproject",
         col_type: "Type",
         col_command: "Command",
@@ -412,47 +388,34 @@ export function generateCertificateHtml(snapshot: ApplicationSnapshot, initialLa
         findings_title: "Resolved Anomalies",
         findings_subtitle: "Cleaned up in AGENTS.md",
         no_findings: "No prior anomalies.",
-        diff_title: "Applied Files & Certified Diff",
-        footer_generated: "Generated on",
-        secured_badge: "Secured (0 loop)"
+        diff_title: "Applied Files & Recorded Diff",
+        footer_generated: "Generated on"
       },
       fr: {
-        cert_title: "Certificat d'Optimisation & Déploiement",
-        cert_official: "Officiel & Vérifié",
-        cert_subtitle: "Preuve d'exécution des tests, conformité et audit ROI généré par RepoTwin",
-        twin_isolated: "Twin Git isolé · 0 régression",
+        cert_title: "Rapport d'application",
+        cert_official: "Instantané enregistré",
+        cert_subtitle: "Constats, tailles des instructions et résultats des commandes enregistrés par RepoTwin",
         audited_project: "Projet audité :",
-        score_health_title: "Score de Santé IA",
+        score_health_title: "Score des constats",
         score_initially: "initialement",
         findings_resolved_title: "Constats Résolus",
         findings_count_suffix: "résolus",
-        zero_regression: "0 régression introduite",
-        controls_passed_title: "Contrôles Validés",
+        controls_passed_title: "Contrôles enregistrés",
         passed_suffix: "passés",
-        success_twin: "100% de réussite en Twin isolé",
         local_backup_title: "Sauvegarde Locale",
         restore_anytime: "Restauration possible à tout moment",
-        roi_title: "Bilan Tokens & Rentabilité des Forfaits IA",
-        roi_badge_robustness: "Robustesse & Zéro-Hallucination",
-        roi_badge_measured: "ROI Mesuré",
-        roi_desc_robustness: "Instructions complétées pour couvrir l'architecture (+${Math.max(0, optTokens - origTokens)} tokens) et résoudre ${snapshot.findings.resolvedCount} anomalie(s). La rentabilité s'exprime par l'élimination des boucles d'échec coûteuses.",
-        roi_desc_compression: "Gains calculés sur l'allègement du prompt système injecté à chaque requête de votre agent IA.",
-        roi_configured_tools: "Forfaits configurés :",
-        roi_size_title: "Taille Maîtrisée",
-        roi_coverage_full: "couverture 100% de l'architecture",
-        roi_loops_title: "Boucles d'Échec Évitées",
-        roi_loops_desc: "0 retry infructueux sur fausse commande",
-        roi_reliability_title: "Fiabilité Validée",
-        roi_security_title: "Sécurisation Forfait",
-        roi_security_desc: "Quotas IA préservés des faux runs",
-        roi_perspective: "Perspective de rentabilité face aux forfaits IA de développement :",
-        roi_status_perspective: "Statut de vos forfaits IA de développement après optimisation :",
-        roi_per_query_title: "Par Requête / Tâche",
-        roi_monthly_title: "Économie Mensuelle",
-        roi_yearly_title: "Économie Annuelle",
-        roi_amortization_title: "Amortissement Forfait",
+        roi_title: "Instructions et résultats mesurés",
+        recorded_metrics: "Mesures enregistrées",
+        measurement_limits: "Les tailles sont des estimations de tokens, pas une consommation API mesurée. Aucune économie mensuelle ni garantie de sécurité ou de comportement IA.",
+        instructions_before: "Instructions avant",
+        instructions_after: "Instructions après",
+        estimated_tokens: "Tokens estimés",
+        not_recorded: "Non enregistré",
+        remaining_findings: "Constats restants",
+        findings_scope: "Score fondé sur les constats ; pas une certification de sécurité",
+        ...${JSON.stringify(verificationLabels.fr)},
         table_title: "Preuve des Contrôles Applicatifs",
-        table_subtitle: "Exécutés sans régression",
+        table_subtitle: "Résultats d'exécution enregistrés",
         col_subproject: "Sous-projet",
         col_type: "Type",
         col_command: "Commande",
@@ -463,9 +426,8 @@ export function generateCertificateHtml(snapshot: ApplicationSnapshot, initialLa
         findings_title: "Anomalies Corrigées",
         findings_subtitle: "Nettoyage validé dans AGENTS.md",
         no_findings: "Aucune anomalie préalable.",
-        diff_title: "Fichiers Appliqués & Diff Certifié",
-        footer_generated: "Généré le",
-        secured_badge: "Sécurisé (0 loop)"
+        diff_title: "Fichiers appliqués et diff enregistré",
+        footer_generated: "Généré le"
       }
     };
 
@@ -498,13 +460,11 @@ export function generateCertificateHtml(snapshot: ApplicationSnapshot, initialLa
 
     // Auto-detect preferred language on page load
     (function initLang() {
-      let saved = 'en';
+      let saved = '${initialLang}';
       try {
-        saved = localStorage.getItem('repotwin_cert_lang') || localStorage.getItem('repotwin_lang') || 'en';
+        saved = localStorage.getItem('repotwin_cert_lang') || localStorage.getItem('repotwin_lang') || '${initialLang}';
       } catch {}
-      if (saved === 'fr') {
-        setCertLang('fr');
-      }
+      setCertLang(saved === 'fr' ? 'fr' : 'en');
     })();
   </script>
 
@@ -556,8 +516,7 @@ export function saveApplicationSnapshot(
   initialLang: 'en' | 'fr' = 'en'
 ): { htmlPath: string; jsonPath: string; htmlContent: string; jsonContent: string; globalHtmlPath?: string } {
   const root = fs.realpathSync(repoPath);
-  const reportsDir = path.join(root, '.repotwin', 'reports');
-  fs.mkdirSync(reportsDir, { recursive: true, mode: 0o755 });
+  const reportsDir = prepareReportStorage(root);
 
   // Build structured, readable, and sortable filename
   const dateStr = formatTimestampForFile(snapshot.appliedAt ? new Date(snapshot.appliedAt) : new Date());
@@ -569,38 +528,36 @@ export function saveApplicationSnapshot(
   const allPassed = snapshot.commands.total > 0 && snapshot.commands.passed === snapshot.commands.total;
   const statusSlug = allPassed ? 'PASSED' : 'NEEDS_FIX';
 
-  const baseName = `${dateStr}__${repoSlug}__${gitSlug}__${scoreSlug}__${statusSlug}`;
+  const baseName = `${dateStr}__${repoSlug}__${gitSlug}__${scoreSlug}__${statusSlug}__${crypto.randomUUID().slice(0, 8)}`;
 
   const jsonContent = JSON.stringify(snapshot, null, 2);
   const jsonPath = path.join(reportsDir, `${baseName}.json`);
-  fs.writeFileSync(jsonPath, jsonContent, 'utf-8');
+  writeReportAtomically(jsonPath, jsonContent);
 
   const htmlContent = generateCertificateHtml(snapshot, initialLang);
   const htmlPath = path.join(reportsDir, `${baseName}.html`);
-  fs.writeFileSync(htmlPath, htmlContent, 'utf-8');
+  writeReportAtomically(htmlPath, htmlContent);
 
   // Backward compatibility: maintain latest alias within the repository
   const latestHtmlPath = path.join(reportsDir, 'repotwin-certificate-latest.html');
   const latestJsonPath = path.join(reportsDir, 'repotwin-certificate-latest.json');
-  try {
-    fs.writeFileSync(latestHtmlPath, htmlContent, 'utf-8');
-    fs.writeFileSync(latestJsonPath, jsonContent, 'utf-8');
-  } catch {}
+  writeReportAtomically(latestHtmlPath, htmlContent);
+  writeReportAtomically(latestJsonPath, jsonContent);
 
   // Global archive (~/.repotwin/reports/) and centralized registry (~/.repotwin/registry.json)
   let globalHtmlPath: string | undefined;
   try {
-    const globalHome = path.join(os.homedir(), '.repotwin');
-    const globalReportsDir = path.join(globalHome, 'reports');
-    fs.mkdirSync(globalReportsDir, { recursive: true, mode: 0o755 });
+    const globalHome = ensureSafeDirectory(os.homedir(), '.repotwin');
+    const globalReportsDir = ensureSafeDirectory(globalHome, 'reports');
 
     globalHtmlPath = path.join(globalReportsDir, `${baseName}.html`);
     const globalJsonPath = path.join(globalReportsDir, `${baseName}.json`);
-    fs.writeFileSync(globalHtmlPath, htmlContent, 'utf-8');
-    fs.writeFileSync(globalJsonPath, jsonContent, 'utf-8');
+    writeReportAtomically(globalHtmlPath, htmlContent);
+    writeReportAtomically(globalJsonPath, jsonContent);
 
     // Update centralized registry
     const registryPath = path.join(globalHome, 'registry.json');
+    assertSafeReportFile(registryPath);
     let registry: Array<Record<string, unknown>> = [];
     if (fs.existsSync(registryPath)) {
       try {
@@ -631,7 +588,7 @@ export function saveApplicationSnapshot(
 
     // Prepend to display most recent audits first
     registry.unshift(registryEntry);
-    fs.writeFileSync(registryPath, JSON.stringify(registry, null, 2), 'utf-8');
+    writeReportAtomically(registryPath, JSON.stringify(registry, null, 2));
   } catch {}
 
   return { htmlPath, jsonPath, htmlContent, jsonContent, globalHtmlPath };

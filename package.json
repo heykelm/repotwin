@@ -1,13 +1,14 @@
 {
   "name": "repotwin",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Experimental optimization and diagnostic platform for Git repositories and AI coding agents",
   "type": "module",
   "bin": {
     "repotwin": "dist/index.js"
   },
   "scripts": {
-    "build": "npm run build:server && npm run build:studio",
+    "build": "npm run build:server && npm run typecheck:studio && npm run build:studio",
+    "typecheck:studio": "tsc --noEmit -p studio/tsconfig.json",
     "build:server": "tsc",
     "build:studio": "vite build --config studio/vite.config.ts",
     "dev": "npm run build:studio && tsx src/index.ts",
@@ -20,6 +21,8 @@
     "dist",
     "README.md",
     "CONTRIBUTING.md",
+    "CHANGELOG.md",
+    "SECURITY.md",
     "LICENSE"
   ],
   "engines": {
