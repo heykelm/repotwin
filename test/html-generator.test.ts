@@ -3,6 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { generateHtmlReport } from '../src/report/html-generator.js';
+import { REPOTWIN_VERSION } from '../src/version.js';
 
 const files: string[] = [];
 
@@ -32,6 +33,7 @@ describe('HTML report generation', () => {
     }, target);
 
     const html = fs.readFileSync(target, 'utf-8');
+    expect(html).toContain(`v${REPOTWIN_VERSION}`);
     expect(html).not.toContain('<script>alert(1)</script>');
     expect(html).toContain('&lt;script&gt;alert(1)&lt;/script&gt;');
   });

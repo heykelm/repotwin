@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { SubprojectInfo, ProcessedFinding } from '../types/index.js';
 import { ScoreBreakdown } from '../diagnostics/score.js';
+import { REPOTWIN_VERSION } from '../version.js';
 
 export interface HtmlReportOptions {
   repoPath: string;
@@ -68,7 +69,7 @@ export function generateHtmlReport(options: HtmlReportOptions, outputPath: strin
           </div>
           <div>
             <h1 class="text-2xl font-bold text-white tracking-tight flex items-center gap-2">
-              RepoTwin <span class="text-xs font-mono font-normal px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">v0.1.0</span>
+              RepoTwin <span class="text-xs font-mono font-normal px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">v${REPOTWIN_VERSION}</span>
             </h1>
             <p class="text-xs text-gray-400">Rapport d'Audit d'Efficacité pour Agents IA</p>
           </div>

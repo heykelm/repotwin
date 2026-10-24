@@ -19,6 +19,7 @@ import { applyRecipe } from '../generator/apply-recipe.js';
 import { buildValidationPlan, runValidationPlan, validationConsentToken, ValidationCommand, ValidationResult } from '../verification/command-runner.js';
 import { saveApplicationSnapshot, ApplicationSnapshot } from '../report/application-snapshot.js';
 import { SubprojectInfo } from '../types/index.js';
+import { REPOTWIN_VERSION } from '../version.js';
 
 interface McpCandidate {
   id: string;
@@ -51,7 +52,7 @@ export function createMcpServer(defaultRepoPath: string = process.cwd()): Server
   const server = new Server(
     {
       name: 'repotwin',
-      version: '0.1.0',
+      version: REPOTWIN_VERSION,
     },
     {
       capabilities: {

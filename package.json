@@ -1,6 +1,6 @@
 {
   "name": "repotwin",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Experimental optimization and diagnostic platform for Git repositories and AI coding agents",
   "type": "module",
   "bin": {

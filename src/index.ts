@@ -17,13 +17,14 @@ import { startDevServer } from './server/dev-server.js';
 import { ProcessedFinding } from './types/index.js';
 import { auditInstructions } from './analyzer/instruction-audit.js';
 import { prepareComparison, compareRevisions } from './verification/revision-comparison.js';
+import { REPOTWIN_VERSION } from './version.js';
 
 const program = new Command();
 
 program
   .name('repotwin')
   .description('RepoTwin — Measure. Optimize. Prove. Diagnostic & Optimization for AI Coding Agents')
-  .version('0.1.0')
+  .version(REPOTWIN_VERSION)
   .option('-r, --from-report <reportFile>', 'Path to an agent report')
   .option('--html', 'Generate an interactive HTML report')
   .option('--json', 'Output results as JSON');
