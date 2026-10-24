@@ -4,7 +4,7 @@
   "description": "Experimental optimization and diagnostic platform for Git repositories and AI coding agents",
   "type": "module",
   "bin": {
-    "repotwin": "./dist/index.js"
+    "repotwin": "dist/index.js"
   },
   "scripts": {
     "build": "npm run build:server && npm run build:studio",
