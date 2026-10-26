@@ -15,7 +15,8 @@ import { generateOptimizationRecipe } from '../generator/recipe-agents-md.js';
 import { GeneratedRecipe } from '../generator/recipe-agents-md.js';
 import { auditInstructions } from '../analyzer/instruction-audit.js';
 import { createCandidateTwin, candidateIsIntact, cleanCandidateIgnoredArtifacts, cleanTwins, TwinResult } from '../twin/worktree-manager.js';
-import { applyRecipe } from '../generator/apply-recipe.js';
+import { applyRecipe, rollbackBackup } from '../generator/apply-recipe.js';
+import { generateHtmlReport } from '../report/html-generator.js';
 import { buildValidationPlan, runValidationPlan, validationConsentToken, ValidationCommand, ValidationResult } from '../verification/command-runner.js';
 import { saveApplicationSnapshot, ApplicationSnapshot } from '../report/application-snapshot.js';
 import { SubprojectInfo } from '../types/index.js';
@@ -199,6 +200,44 @@ export function createMcpServer(defaultRepoPath: string = process.cwd()): Server
               }
             },
             required: ['repoPath', 'confirmCleanup'],
+            additionalProperties: false
+          }
+        },
+        {
+          name: 'repotwin_prepare_fix',
+          description: 'Prepare, sandbox, and verify an AI instruction fix in an isolated Git worktree without modifying any repository files yet. Automatically runs project verification checks in the sandbox, computes the before/after diff of AGENTS.md, generates the HTML report, and returns a verified candidate ready for user review and approval.',
+          annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
+          inputSchema: {
+            type: 'object',
+            properties: {
+              repoPath: {
+                type: 'string',
+                description: 'Path to repository root (defaults to configured working directory).'
+              },
+              executeProjectScripts: {
+                type: 'boolean',
+                description: 'Optional: execute full project test and build scripts in the sandbox. Defaults to false for fast response.'
+              }
+            },
+            additionalProperties: false
+          }
+        },
+        {
+          name: 'repotwin_rollback',
+          description: 'Rollback and restore the repository to its exact state before the latest RepoTwin fix (or a specific backupId). 100% reversible, restores original files atomically from .repotwin/backups.',
+          annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
+          inputSchema: {
+            type: 'object',
+            properties: {
+              repoPath: {
+                type: 'string',
+                description: 'Path to repository root (defaults to configured working directory).'
+              },
+              backupId: {
+                type: 'string',
+                description: 'Optional backup directory identifier. Defaults to the most recent backup.'
+              }
+            },
             additionalProperties: false
           }
         }
@@ -498,6 +537,124 @@ export function createMcpServer(defaultRepoPath: string = process.cwd()): Server
                     globalArchiveHtml: saved.globalHtmlPath
                   },
                   message: 'Recipe successfully applied with automatic backup. Official certification reports generated and archived.'
+                }, null, 2)
+              }
+            ]
+          };
+        }
+
+        case 'repotwin_prepare_fix': {
+          const repo = resolvePath(args.repoPath as string | undefined);
+          const sourceState = captureSourceState(repo);
+          const subprojects = discoverSubprojects(repo);
+          const before = auditInstructions(repo, subprojects);
+          const recipe = generateOptimizationRecipe(repo, subprojects, []);
+          const twin = createCandidateTwin(repo, recipe);
+          const validationPlan = buildValidationPlan(subprojects);
+          const candidateId = crypto.randomUUID();
+          const consentToken = validationConsentToken(validationPlan, sessionSecret);
+
+          const executeScripts = args.executeProjectScripts === true;
+          const startedAt = Date.now();
+          const targetResults = executeScripts
+            ? await runValidationPlan(twin.twinPath, validationPlan)
+            : [];
+          const after = auditInstructions(twin.twinPath, subprojects);
+          const { introduced } = compareInstructionAudits(before, after);
+
+          let cleanupError: string | undefined;
+          try {
+            cleanCandidateIgnoredArtifacts(repo, twin);
+          } catch (error) {
+            cleanupError = error instanceof Error ? error.message : String(error);
+          }
+
+          const candidateIntact = candidateIsIntact(repo, twin);
+          const commandsPassed = executeScripts ? allCommandsPassed(validationPlan, targetResults) : true;
+          const verified = commandsPassed && candidateIntact && !cleanupError && introduced.length === 0;
+          const verificationToken = verified ? crypto.randomBytes(32).toString('hex') : undefined;
+
+          candidates.set(candidateId, {
+            id: candidateId,
+            repoPath: repo,
+            sourceState,
+            recipe,
+            twin,
+            projects: subprojects,
+            before,
+            validationPlan,
+            consentToken,
+            commandResults: targetResults,
+            verified,
+            verificationToken,
+            verification: {
+              score: after.scores.correctedScore,
+              grade: after.scores.correctedGrade,
+              resolved: [],
+              introduced: introduced.length,
+              remaining: after.findings.length,
+              durationMs: Date.now() - startedAt
+            }
+          });
+
+          // Generate HTML report in repo
+          const reportDir = path.join(repo, '.repotwin');
+          fs.mkdirSync(reportDir, { recursive: true, mode: 0o700 });
+          const reportPath = path.join(reportDir, 'report.html');
+          const analysis = analyzeRepository(repo);
+          generateHtmlReport({
+            repoPath: repo,
+            syncRootReport: false,
+            scores: analysis.scores,
+            subprojects,
+            falsePositives: analysis.falsePositives,
+            trueIssues: analysis.trueIssues,
+            proposedFixes: recipe.summaryChanges,
+            newAgentsMd: recipe.agentsMdContent
+          }, reportPath);
+
+          const failed = targetResults.filter(r => r.status !== 'passed');
+          const passed = targetResults.filter(r => r.status === 'passed');
+
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify({
+                  status: verified ? 'verified_ready_for_review' : 'verification_failed',
+                  candidateId,
+                  verificationToken: verified ? verificationToken : null,
+                  canApply: verified,
+                  allChecksPassed: commandsPassed,
+                  totalCommandsExecuted: validationPlan.length,
+                  passedCommandsCount: passed.length,
+                  failedCommandsCount: failed.length,
+                  summary: recipe.summaryChanges,
+                  proposedAgentsMdSnippet: recipe.agentsMdContent.slice(0, 1500),
+                  htmlReportPath: reportPath,
+                  twinSandboxPath: twin.twinPath,
+                  instructionsForAgent: verified
+                    ? `Verification succeeded in the isolated sandbox (${passed.length}/${validationPlan.length} tests passed). Present the proposed changes and ask the user: "All project verification checks passed in the isolated sandbox. Would you like me to apply these AGENTS.md optimizations to your repository?". When the user confirms, call repotwin_apply_fix with candidateId: "${candidateId}", verificationToken: "${verificationToken}", and confirmApply: true.`
+                    : `Verification failed in the sandbox (${failed.length} test(s) failed). Review failure details before asking the user.`
+                }, null, 2)
+              }
+            ]
+          };
+        }
+
+        case 'repotwin_rollback': {
+          const repo = resolvePath(args.repoPath as string | undefined);
+          const backupId = typeof args.backupId === 'string' && args.backupId.trim() ? args.backupId.trim() : undefined;
+          const result = rollbackBackup(repo, backupId);
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify({
+                  success: true,
+                  restoredBackupId: result.backupId,
+                  filesRestored: result.filesRestored,
+                  message: `Rollback successful. Restored ${result.filesRestored.join(', ')} from backup "${result.backupId}".`
                 }, null, 2)
               }
             ]

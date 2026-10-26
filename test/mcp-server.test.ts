@@ -113,4 +113,55 @@ describe('RepoTwin MCP safety workflow', () => {
 
     await client.close();
   });
+
+  it('supports the smooth prepare_fix and rollback workflow', async () => {
+    const repo = repository();
+    const twins = fs.mkdtempSync(path.join(os.tmpdir(), 'repotwin-mcp-cache-'));
+    directories.push(twins);
+    process.env.REPOTWIN_TWINS_DIR = twins;
+
+    fs.writeFileSync(path.join(repo, 'AGENTS.md'), '# original custom instructions\n');
+
+    const server = createMcpServer(repo);
+    const client = new Client({ name: 'test-client-smooth', version: '1.0.0' });
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    await Promise.all([server.connect(serverTransport), client.connect(clientTransport)]);
+
+    // 1. Prepare fix (runs sandbox checks, returns ready candidate without touching repo)
+    const prepared = payload(await client.callTool({
+      name: 'repotwin_prepare_fix',
+      arguments: { repoPath: repo }
+    }));
+    expect(prepared.status).toBe('verified_ready_for_review');
+    expect(prepared.canApply).toBe(true);
+    expect(prepared.candidateId).toBeDefined();
+    expect(prepared.verificationToken).toBeDefined();
+    // Repo must still have its original content untouched
+    expect(fs.readFileSync(path.join(repo, 'AGENTS.md'), 'utf-8')).toBe('# original custom instructions\n');
+
+    // 2. Apply fix upon user confirmation
+    const applied = payload(await client.callTool({
+      name: 'repotwin_apply_fix',
+      arguments: {
+        candidateId: prepared.candidateId,
+        verificationToken: prepared.verificationToken,
+        confirmApply: true
+      }
+    }));
+    expect(applied.success).toBe(true);
+    expect(fs.readFileSync(path.join(repo, 'AGENTS.md'), 'utf-8')).toContain('repotwin:start');
+
+    // 3. Rollback in 1 click
+    const rolledBack = payload(await client.callTool({
+      name: 'repotwin_rollback',
+      arguments: { repoPath: repo }
+    }));
+    expect(rolledBack.success).toBe(true);
+    expect(rolledBack.filesRestored).toContain('AGENTS.md');
+    // Content is exactly restored to original
+    expect(fs.readFileSync(path.join(repo, 'AGENTS.md'), 'utf-8')).toBe('# original custom instructions\n');
+
+    await client.close();
+  });
 });
+

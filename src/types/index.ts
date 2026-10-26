@@ -63,3 +63,5 @@ export interface AnalysisReport {
   infoCount: number;
   findings: ProcessedFinding[];
 }
+
+export * from './contracts.js';

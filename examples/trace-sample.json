@@ -1,0 +1,30 @@
+{
+  "schemaVersion": "1",
+  "runId": "sample-run-claude-01",
+  "taskId": "task-core-verification",
+  "repositoryFingerprint": "sample-fp",
+  "commitSha": "sample-sha",
+  "variant": "baseline",
+  "agentName": "claude-code",
+  "modelId": "claude-3-7-sonnet",
+  "status": "success",
+  "tokens": {
+    "input": 24000,
+    "output": 3500,
+    "cachedInput": 18000,
+    "total": 27500,
+    "source": "provider"
+  },
+  "durationMs": 14200,
+  "toolCalls": 18,
+  "filesRead": [
+    "AGENTS.md",
+    "src/index.ts",
+    "package.json",
+    "src/types/index.ts"
+  ],
+  "validation": {
+    "commands": ["npm test"],
+    "passed": true
+  }
+}

@@ -43,3 +43,49 @@ export function applyRecipe(repoPath: string, recipe: GeneratedRecipe): string {
   }
   return backupDir;
 }
+
+export function rollbackBackup(repoPath: string, backupId?: string): { backupId: string; filesRestored: string[] } {
+  const root = fs.realpathSync(repoPath);
+  const backupsBase = path.join(root, '.repotwin', 'backups');
+  if (!fs.existsSync(backupsBase)) {
+    throw new Error('No backups directory found. Nothing to rollback.');
+  }
+
+  const entries = fs.readdirSync(backupsBase, { withFileTypes: true })
+    .filter(d => d.isDirectory())
+    .map(d => ({
+      name: d.name,
+      path: path.join(backupsBase, d.name),
+      mtime: fs.statSync(path.join(backupsBase, d.name)).mtimeMs
+    }))
+    .sort((a, b) => b.mtime - a.mtime);
+
+  if (entries.length === 0) {
+    throw new Error('No previous backups found to rollback.');
+  }
+
+  const targetBackup = backupId
+    ? entries.find(e => e.name === backupId)
+    : entries[0];
+
+  if (!targetBackup) {
+    throw new Error(`Backup "${backupId}" not found.`);
+  }
+
+  const backupFiles = fs.readdirSync(targetBackup.path, { withFileTypes: true })
+    .filter(f => f.isFile());
+
+  const filesRestored: string[] = [];
+  for (const file of backupFiles) {
+    const src = path.join(targetBackup.path, file.name);
+    const dest = path.join(root, file.name);
+    const content = fs.readFileSync(src);
+    const temporary = path.join(root, `.repotwin-rollback-${crypto.randomUUID()}.tmp`);
+    fs.writeFileSync(temporary, content, { mode: 0o600 });
+    fs.renameSync(temporary, dest);
+    filesRestored.push(file.name);
+  }
+
+  return { backupId: targetBackup.name, filesRestored };
+}
+

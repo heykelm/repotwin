@@ -120,7 +120,9 @@ ${subprojectRows}
   };
 
   const agentReadyJsonContent = JSON.stringify(agentReadyConfig, null, 2);
-  summaryChanges.push('Generates agent-ready.json for compatible third-party scanners');
+  if (fs.existsSync(configPath)) {
+    summaryChanges.push('Updates existing agent-ready.json with discovered project checks');
+  }
 
   return {
     agentsMdContent: canonicalAgentsMd,

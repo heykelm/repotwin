@@ -5,6 +5,7 @@ dist/
 .cache/
 .repotwin/
 repotwin-report.html
+repotwin-report-*.html
 test-results/
 coverage/
 

@@ -1,0 +1,21 @@
+{
+  "schemaVersion": "1",
+  "suiteId": "repotwin-smoke-suite",
+  "description": "Standard non-regression and context efficiency benchmark suite",
+  "tasks": [
+    {
+      "schemaVersion": "1",
+      "id": "task-core-verification",
+      "description": "Verify core test suite and build output",
+      "limits": {
+        "maxWallTimeSeconds": 300,
+        "maxTokens": 80000,
+        "maxToolCalls": 50
+      },
+      "validation": {
+        "commands": ["npm test -- test/trace-parser.test.ts"],
+        "required": true
+      }
+    }
+  ]
+}
