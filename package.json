@@ -15,7 +15,8 @@
     "pretest": "npm run build:studio",
     "test": "vitest run --no-cache --test-timeout 20000",
     "test:watch": "vitest",
-    "prepack": "npm run build"
+    "prepack": "npm run build",
+    "setup-mcp": "node dist/index.js setup-mcp"
   },
   "files": [
     "dist",

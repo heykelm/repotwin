@@ -49,6 +49,42 @@ export const SUPPORTED_IDES: TargetIde[] = [
     name: 'Windsurf (Codeium)',
     getConfigPath: () => path.join(os.homedir(), '.codeium', 'windsurf', 'mcp_config.json'),
     keyPath: 'mcpServers'
+  },
+  {
+    id: 'claude-code',
+    name: 'Claude Code CLI',
+    getConfigPath: () => path.join(os.homedir(), '.claude.json'),
+    keyPath: 'mcpServers'
+  },
+  {
+    id: 'roo-cline',
+    name: 'VS Code Roo Code',
+    getConfigPath: () => {
+      const platform = process.platform;
+      if (platform === 'darwin') {
+        return path.join(os.homedir(), 'Library', 'Application Support', 'Code', 'User', 'globalStorage', 'rooveterinaryinc.roo-cline', 'settings', 'cline_mcp_settings.json');
+      } else if (platform === 'win32') {
+        return path.join(process.env.APPDATA || path.join(os.homedir(), 'AppData', 'Roaming'), 'Code', 'User', 'globalStorage', 'rooveterinaryinc.roo-cline', 'settings', 'cline_mcp_settings.json');
+      } else {
+        return path.join(os.homedir(), '.config', 'Code', 'User', 'globalStorage', 'rooveterinaryinc.roo-cline', 'settings', 'cline_mcp_settings.json');
+      }
+    },
+    keyPath: 'mcpServers'
+  },
+  {
+    id: 'cline',
+    name: 'VS Code Cline',
+    getConfigPath: () => {
+      const platform = process.platform;
+      if (platform === 'darwin') {
+        return path.join(os.homedir(), 'Library', 'Application Support', 'Code', 'User', 'globalStorage', 'saoudrizwan.claude-dev', 'settings', 'cline_mcp_settings.json');
+      } else if (platform === 'win32') {
+        return path.join(process.env.APPDATA || path.join(os.homedir(), 'AppData', 'Roaming'), 'Code', 'User', 'globalStorage', 'saoudrizwan.claude-dev', 'settings', 'cline_mcp_settings.json');
+      } else {
+        return path.join(os.homedir(), '.config', 'Code', 'User', 'globalStorage', 'saoudrizwan.claude-dev', 'settings', 'cline_mcp_settings.json');
+      }
+    },
+    keyPath: 'mcpServers'
   }
 ];
 
@@ -175,7 +211,9 @@ export function runMcpSetup(options: SetupOptions = {}): void {
 
   let targetIdes: TargetIde[] = [];
 
-  if (options.targets && options.targets.length > 0 && !options.targets.includes('all')) {
+  if (options.targets && options.targets.includes('all')) {
+    targetIdes = [...SUPPORTED_IDES];
+  } else if (options.targets && options.targets.length > 0) {
     const requested = options.targets.map(t => t.toLowerCase()).map(t => t === 'claude' ? 'claude-desktop' : t);
     targetIdes = SUPPORTED_IDES.filter(ide => requested.includes(ide.id));
     if (targetIdes.length === 0) {

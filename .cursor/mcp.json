@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "repotwin": {
+      "command": "node",
+      "args": ["dist/index.js", "mcp"]
+    }
+  }
+}
+

@@ -23,6 +23,8 @@ import { SubprojectInfo } from '../types/index.js';
 import { REPOTWIN_VERSION } from '../version.js';
 import { captureSourceState, assertSourceUnchanged, SourceState } from '../verification/source-state.js';
 import { prepareReportStorage } from '../report/safe-storage.js';
+import { sieveCommandOutput } from '../verification/compact-sieve.js';
+import { auditTokenEfficiency } from '../analysis/token-efficiency.js';
 import { compareInstructionAudits, allCommandsPassed } from '../verification/candidate-assessment.js';
 
 interface McpCandidate {
@@ -148,6 +150,10 @@ export function createMcpServer(defaultRepoPath: string = process.cwd()): Server
               onlyFailed: {
                 type: 'boolean',
                 description: 'If true, re-runs only commands that failed in previous attempts.'
+              },
+              compactOutput: {
+                type: 'boolean',
+                description: 'If true (default), strips terminal noise, warnings and long stack traces to return minimal, high-precision diagnostics and preserve agent context tokens.'
               }
             },
             required: ['candidateId', 'commandConsent'],
@@ -236,6 +242,21 @@ export function createMcpServer(defaultRepoPath: string = process.cwd()): Server
               backupId: {
                 type: 'string',
                 description: 'Optional backup directory identifier. Defaults to the most recent backup.'
+              }
+            },
+            additionalProperties: false
+          }
+        },
+        {
+          name: 'repotwin_token_audit',
+          description: 'Audit repository instruction weight, context hogs (large files >500 lines), command verbosity, and calculate token savings potential.',
+          annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+          inputSchema: {
+            type: 'object',
+            properties: {
+              repoPath: {
+                type: 'string',
+                description: 'Path to repository root (defaults to configured working directory).'
               }
             },
             additionalProperties: false
@@ -391,6 +412,42 @@ export function createMcpServer(defaultRepoPath: string = process.cwd()): Server
           const failed = candidate.commandResults.filter(result => result.status !== 'passed');
           const passed = candidate.commandResults.filter(result => result.status === 'passed');
 
+          const isCompact = args.compactOutput !== false;
+          let totalRawTokens = 0;
+          let totalCompactTokens = 0;
+
+          const failures = failed.map(f => {
+            const sieve = sieveCommandOutput(f.output, f.kind, f.status);
+            totalRawTokens += sieve.metrics.estimatedRawTokens;
+            totalCompactTokens += isCompact ? sieve.metrics.estimatedCompactTokens : sieve.metrics.estimatedRawTokens;
+            return {
+              id: f.id,
+              project: f.project,
+              subprojectPath: f.relPath,
+              kind: f.kind,
+              command: f.display,
+              exitCode: f.exitCode,
+              durationMs: f.durationMs,
+              errorOutput: isCompact ? sieve.compactOutput : f.output.slice(-2000),
+              extractedFailures: isCompact && sieve.failures.length > 0 ? sieve.failures : undefined,
+              tokenSavings: isCompact ? {
+                rawTokens: sieve.metrics.estimatedRawTokens,
+                compactTokens: sieve.metrics.estimatedCompactTokens,
+                tokensPreserved: sieve.metrics.tokensPreserved,
+                savingsPercent: sieve.metrics.savingsPercent
+              } : undefined
+            };
+          });
+
+          for (const p of passed) {
+            const sieve = sieveCommandOutput(p.output, p.kind, p.status);
+            totalRawTokens += sieve.metrics.estimatedRawTokens;
+            totalCompactTokens += isCompact ? sieve.metrics.estimatedCompactTokens : sieve.metrics.estimatedRawTokens;
+          }
+
+          const totalTokensPreserved = Math.max(0, totalRawTokens - totalCompactTokens);
+          const overallSavingsPercent = totalRawTokens > 0 ? Math.round((totalTokensPreserved / totalRawTokens) * 100) : 0;
+
           return {
             content: [
               {
@@ -405,16 +462,17 @@ export function createMcpServer(defaultRepoPath: string = process.cwd()): Server
                   candidateIntact,
                   noInstructionRegression: introduced.length === 0,
                   cleanupError,
-                  failures: failed.map(f => ({
-                    id: f.id,
-                    project: f.project,
-                    subprojectPath: f.relPath,
-                    kind: f.kind,
-                    command: f.display,
-                    exitCode: f.exitCode,
-                    durationMs: f.durationMs,
-                    errorOutput: f.output.slice(-2000), // Trailing 2000 characters for agent diagnostics
-                  })),
+                  tokenEfficiency: isCompact ? {
+                    compactMode: true,
+                    estimatedRawTokens: totalRawTokens,
+                    compactTokensReturned: totalCompactTokens,
+                    tokensPreserved: totalTokensPreserved,
+                    savingsPercent: overallSavingsPercent,
+                    contextProtection: `${totalTokensPreserved} tokens kept out of agent context window.`
+                  } : {
+                    compactMode: false
+                  },
+                  failures,
                   passedCommands: passed.map(p => ({
                     project: p.project,
                     kind: p.kind,
@@ -656,6 +714,20 @@ export function createMcpServer(defaultRepoPath: string = process.cwd()): Server
                   filesRestored: result.filesRestored,
                   message: `Rollback successful. Restored ${result.filesRestored.join(', ')} from backup "${result.backupId}".`
                 }, null, 2)
+              }
+            ]
+          };
+        }
+
+        case 'repotwin_token_audit': {
+          const repo = resolvePath(args.repoPath as string | undefined);
+          const subprojects = discoverSubprojects(repo);
+          const audit = auditTokenEfficiency(repo, subprojects);
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify(audit, null, 2)
               }
             ]
           };

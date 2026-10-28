@@ -5,6 +5,7 @@ import { disambiguateFinding } from '../diagnostics/disambiguator.js';
 import { calculateScores } from '../diagnostics/score.js';
 import { generateOptimizationRecipe } from '../generator/recipe-agents-md.js';
 import { auditInstructions } from './instruction-audit.js';
+import { auditTokenEfficiency } from '../analysis/token-efficiency.js';
 
 export function analyzeRepository(repoPath: string, reportPath?: string) {
   const projectDiscovery = discoverProjectInventory(repoPath);
@@ -14,6 +15,7 @@ export function analyzeRepository(repoPath: string, reportPath?: string) {
   const knownTables = discoverKnownTables(repoPath, fileSet);
   const findings = reportPath ? parseAgentReport(reportPath) : [];
   const processed = findings.map(raw => disambiguateFinding(raw, { fileSet, rules, subprojects, knownTables }));
+  const tokenEfficiency = auditTokenEfficiency(repoPath, subprojects);
   return {
     repoPath,
     subprojects,
@@ -24,6 +26,7 @@ export function analyzeRepository(repoPath: string, reportPath?: string) {
     trueIssues: processed.filter(f => !f.isFalsePositive),
     scores: calculateScores(processed, reportPath !== undefined),
     recipe: generateOptimizationRecipe(repoPath, subprojects, processed),
-    instructionAudit: auditInstructions(repoPath, subprojects)
+    instructionAudit: auditInstructions(repoPath, subprojects),
+    tokenEfficiency
   };
 }

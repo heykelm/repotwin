@@ -139,7 +139,8 @@ function runAnalyze(repoPathArg?: string, options: AnalyzeOptions = {}) {
       falsePositivesBreakdown: Object.fromEntries(
         Array.from(fpByClassification.entries()).map(([k, v]) => [k, v.length])
       ),
-      proposedFixes: recipe.summaryChanges
+      proposedFixes: recipe.summaryChanges,
+      tokenEfficiency: analysis.tokenEfficiency
     }, null, 2));
     return;
   }
@@ -205,6 +206,20 @@ function runAnalyze(repoPathArg?: string, options: AnalyzeOptions = {}) {
   console.log(`  ${chalk.cyan('•')} ${chalk.bold('Tokens préservés')}     : ${chalk.green.bold('~2.28M')} tokens économisés (élimination des re-scans aveugles)`);
   console.log(`  ${chalk.cyan('•')} ${chalk.bold('Courbe vectorielle')}   : Générée dans le rapport HTML (--html)`);
 
+  const tokenEff = analysis.tokenEfficiency;
+  console.log(chalk.bold.magenta('\n⚡ 7. BUDGET CONTEXTE & EFFICIENCE TOKENS :'));
+  console.log('======================================================================');
+  console.log(`  Score d'efficience token     : ${chalk.green.bold(`${tokenEff.score}/100 (Grade ${tokenEff.grade})`)}`);
+  console.log(`  Empreinte consignes (prompts): ${tokenEff.totalInstructionTokens} tokens (${tokenEff.instructionsStatus})`);
+  console.log(`  Fichiers volumineux (>500 l) : ${tokenEff.contextHogs.length} détecté(s)`);
+  if (tokenEff.contextHogs.length > 0) {
+    for (const hog of tokenEff.contextHogs.slice(0, 2)) {
+      console.log(`    ${chalk.gray('↳')} ${chalk.yellow(hog.path)} (${hog.lines} lignes, ~${hog.estimatedTokens} tokens)`);
+    }
+  }
+  console.log(`  Économie Twin Sieve estimée  : ${chalk.green.bold(`~${tokenEff.estimatedSieveSavingsPercent}%`)} des tokens de test préservés`);
+  console.log('======================================================================');
+
   // HTML Report generation if requested
   if (options.html) {
     const reportDir = path.join(repoPath, '.repotwin');
@@ -223,7 +238,7 @@ function runAnalyze(repoPathArg?: string, options: AnalyzeOptions = {}) {
     console.log(chalk.bold.green(`\nHTML report generated: ${chalk.underline(reportPath)}`));
   }
 
-  console.log(chalk.bold.cyan('\n🚀 7. ACTIONS EN 1 CLIC :'));
+  console.log(chalk.bold.cyan('\n🚀 8. ACTIONS EN 1 CLIC :'));
   console.log(`  • Generate an HTML report: ${chalk.bold.cyan('repotwin analyze --html')}`);
   console.log(`  • Preview the proposed instruction files: ${chalk.bold.yellow('repotwin fix')}`);
   console.log(`  • Apply after review: ${chalk.bold.yellow('repotwin fix --apply')}`);

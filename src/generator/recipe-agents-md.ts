@@ -52,6 +52,8 @@ Always verify changes before marking a task complete:
 | Subproject | Type | Test Command | Lint Command | Build Command |
 | :--- | :--- | :--- | :--- | :--- |
 ${subprojectRows}
+
+- **Token Budget Protection :** When validating changes, prefer using the \`repotwin_run_checks\` MCP tool. It automatically strips test runner verbosity and provides surgical error diagnostics to prevent context exhaustion.
 `.trim();
 
   // 4. Build Architecture & Central Source of Truth Section
@@ -107,6 +109,11 @@ ${subprojectRows}
       const commands = [s.testScript, s.lintScript, s.buildScript].filter((command): command is string => Boolean(command));
       return commands.length ? [[s.relPath, commands.map(command => `cd '${s.relPath.replace(/'/g, "'\\''")}' && ${command}`)]] : [];
     })),
+    tokenOptimization: {
+      compactRunner: true,
+      sieveTerminalNoise: true,
+      estimatedSavings: "~75%"
+    },
     safety: {
       ...(existingConfig.safety && typeof existingConfig.safety === 'object' && !Array.isArray(existingConfig.safety) ? existingConfig.safety : {}),
       protectedPaths: [...new Set([
