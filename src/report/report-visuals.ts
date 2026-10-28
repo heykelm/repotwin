@@ -26,6 +26,107 @@ export function renderArchiveTimeline(history: LocalEvidence['history'], locale:
     ${history.map(entry => `<li><span class="timeline-dot" aria-hidden="true"></span><time datetime="${escapeHtml(entry.date)}">${escapeHtml(new Date(entry.date).toLocaleString(fr ? 'fr-FR' : 'en-GB', { dateStyle: 'medium', timeStyle: 'medium', timeZone }))}</time><code>${escapeHtml(entry.git ?? '—')}</code><small>${t('Enregistrement archivé', 'Archived record')}</small></li>`).join('')}
   </ol><p class="source">${t('Une date correspond à un enregistrement distinct, après retrait des doublons. Cette chronologie ne représente pas une courbe de gain.', 'Each date is a distinct record, after deduplication. This timeline is not an improvement curve.')}</p>`;
 }
+
+export function renderCompoundingTokenCurve(locale: 'fr' | 'en'): string {
+  const en = locale === 'en';
+  const title = en
+    ? 'Active Context Window: Raw Terminal vs. RepoTwin Twin Sieve'
+    : 'Fenêtre de Contexte Active : Terminal Brut vs. Twin Sieve RepoTwin';
+  const subtitle = en
+    ? 'REPOTWIN V0.3.0 · CONTEXT COMPOUNDING IMPACT OVER 5 DEBUG ITERATIONS'
+    : 'REPOTWIN V0.3.0 · IMPACT DE L\'ACCUMULATION DE CONTEXTE SUR 5 ITÉRATIONS';
+  const rawLegend = en ? 'Without RepoTwin (Raw O(N²))' : 'Sans RepoTwin (Brut O(N²))';
+  const twinLegend = en ? 'With RepoTwin (~75% Saved)' : 'Avec RepoTwin (~75% Économisés)';
+  const badgeText = en ? '⚡ 75% TOKENS PRESERVED' : '⚡ 75% DE TOKENS PRÉSERVÉS';
+
+  return `<div class="token-curve-wrap" style="margin: 20px 0;">
+    <svg viewBox="0 0 760 360" width="100%" height="auto" role="img" aria-label="${title}" style="border-radius: 14px; border: 1px solid var(--border); background: #080e18;">
+      <defs>
+        <linearGradient id="curveBgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stop-color="#090d16" />
+          <stop offset="100%" stop-color="#0e1726" />
+        </linearGradient>
+        <linearGradient id="curvePreservedGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+          <stop offset="0%" stop-color="#10b981" stop-opacity="0.35" />
+          <stop offset="100%" stop-color="#10b981" stop-opacity="0.05" />
+        </linearGradient>
+        <linearGradient id="curveRedLineGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+          <stop offset="0%" stop-color="#f87171" />
+          <stop offset="100%" stop-color="#ef4444" />
+        </linearGradient>
+        <linearGradient id="curveGreenLineGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+          <stop offset="0%" stop-color="#34d399" />
+          <stop offset="100%" stop-color="#10b981" />
+        </linearGradient>
+      </defs>
+
+      <rect width="760" height="360" rx="14" fill="url(#curveBgGrad)" />
+
+      <text x="32" y="38" fill="#38d9a9" font-family="'JetBrains Mono', monospace" font-size="11" font-weight="700" letter-spacing="1.2">${subtitle}</text>
+      <text x="32" y="64" fill="#f8fafc" font-family="'Plus Jakarta Sans', system-ui, sans-serif" font-size="16" font-weight="800">${title}</text>
+
+      <g transform="translate(420, 26)">
+        <circle cx="10" cy="10" r="5" fill="#ef4444" />
+        <text x="22" y="14" fill="#94a3b8" font-family="system-ui, sans-serif" font-size="11" font-weight="600">${rawLegend}</text>
+        <circle cx="190" cy="10" r="5" fill="#10b981" />
+        <text x="202" y="14" fill="#34d399" font-family="system-ui, sans-serif" font-size="11" font-weight="700">${twinLegend}</text>
+      </g>
+
+      <g stroke="#1e293b" stroke-dasharray="3 3" opacity="0.7">
+        <line x1="70" y1="90" x2="710" y2="90" />
+        <line x1="70" y1="140" x2="710" y2="140" />
+        <line x1="70" y1="190" x2="710" y2="190" />
+        <line x1="70" y1="240" x2="710" y2="240" />
+        <line x1="70" y1="290" x2="710" y2="290" />
+      </g>
+
+      <g fill="#64748b" font-family="'JetBrains Mono', monospace" font-size="10" text-anchor="end">
+        <text x="60" y="94">40k</text>
+        <text x="60" y="144">30k</text>
+        <text x="60" y="194">20k</text>
+        <text x="60" y="244">10k</text>
+        <text x="60" y="294">0k</text>
+      </g>
+
+      <path d="M 110 270 C 180 260, 210 240, 250 230 C 290 220, 350 190, 390 175 C 430 160, 490 130, 530 110 C 570 90, 630 60, 670 45 L 670 248 C 630 250, 570 252, 530 253 C 490 254, 430 257, 390 259 C 350 261, 290 263, 250 264 L 110 270 Z" fill="url(#curvePreservedGrad)" />
+
+      <g transform="translate(460, 160)">
+        <rect width="180" height="28" rx="7" fill="#064e3b" stroke="#059669" stroke-width="1.2" opacity="0.95" />
+        <text x="90" y="18" fill="#a7f3d0" font-family="'JetBrains Mono', monospace" font-size="11" font-weight="700" text-anchor="middle">${badgeText}</text>
+      </g>
+
+      <path d="M 110 270 C 180 260, 210 240, 250 230 C 290 220, 350 190, 390 175 C 430 160, 490 130, 530 110 C 570 90, 630 60, 670 45" fill="none" stroke="url(#curveRedLineGrad)" stroke-width="3" stroke-linecap="round" />
+      <path d="M 110 270 C 180 268, 210 266, 250 264 C 290 262, 350 260, 390 259 C 430 256, 490 254, 530 253 C 570 250, 630 249, 670 248" fill="none" stroke="url(#curveGreenLineGrad)" stroke-width="3" stroke-linecap="round" />
+
+      <circle cx="110" cy="270" r="4.5" fill="#ef4444" />
+      <circle cx="250" cy="230" r="4.5" fill="#ef4444" />
+      <circle cx="390" cy="175" r="4.5" fill="#ef4444" />
+      <circle cx="530" cy="110" r="4.5" fill="#ef4444" />
+      <circle cx="670" cy="45" r="5.5" fill="#f87171" stroke="#ef4444" stroke-width="2" />
+      <text x="670" y="32" fill="#fca5a5" font-family="'JetBrains Mono', monospace" font-size="11" font-weight="700" text-anchor="middle">~38k tks</text>
+
+      <circle cx="110" cy="270" r="4.5" fill="#10b981" />
+      <circle cx="250" cy="264" r="4.5" fill="#10b981" />
+      <circle cx="390" cy="259" r="4.5" fill="#10b981" />
+      <circle cx="530" cy="253" r="4.5" fill="#10b981" />
+      <circle cx="670" cy="248" r="5.5" fill="#34d399" stroke="#10b981" stroke-width="2" />
+      <text x="670" y="274" fill="#6ee7b7" font-family="'JetBrains Mono', monospace" font-size="11" font-weight="700" text-anchor="middle">~8.4k tks</text>
+
+      <g fill="#94a3b8" font-family="system-ui, sans-serif" font-size="11" font-weight="600" text-anchor="middle">
+        <text x="110" y="320">Turn 1</text>
+        <text x="110" y="335" fill="#64748b" font-size="9.5">Prompt</text>
+        <text x="250" y="320">Turn 2</text>
+        <text x="250" y="335" fill="#64748b" font-size="9.5">${en ? 'Test 1 Fail' : 'Échec Test 1'}</text>
+        <text x="390" y="320">Turn 3</text>
+        <text x="390" y="335" fill="#64748b" font-size="9.5">${en ? 'Test 2 Fail' : 'Échec Test 2'}</text>
+        <text x="530" y="320">Turn 4</text>
+        <text x="530" y="335" fill="#64748b" font-size="9.5">${en ? 'Test 3 Fail' : 'Échec Test 3'}</text>
+        <text x="670" y="320">Turn 5</text>
+        <text x="670" y="335" fill="#10b981" font-size="9.5" font-weight="700">${en ? 'All Tests Pass' : 'Tous Tests OK'}</text>
+      </g>
+    </svg>
+  </div>`;
+}
 export const reportVisualStyles = `
 .pipeline-track{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin:20px 0 28px;position:relative}
 .pipeline-step{background:linear-gradient(145deg,rgba(18,30,46,0.9),rgba(10,16,26,0.95));border:1px solid var(--border);border-radius:14px;padding:16px;position:relative;transition:all .2s;box-shadow:0 4px 14px rgba(0,0,0,0.25)}

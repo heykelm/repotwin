@@ -60,6 +60,10 @@ When an AI agent executes test commands via RepoTwin's MCP server, the test runs
 | **Daily active developer impact** | Burns 5-hour quota in < 1 hour | Extends session endurance | **2.5x longer quota stamina** |
 | **Direct API cost (Sonnet 3.5/3.7)** | Standard rate | -$3 to -$5 / day per dev | **~$70 - $100 / month saved** |
 
+<p align="center">
+  <img src="docs/assets/token-compounding-curve.svg" alt="RepoTwin Token Compounding Curve" width="100%" />
+</p>
+
 ### 3. Context Budget Audit (`repotwin analyze`)
 RepoTwin statically audits your repository for AI token efficiency:
 - **Instruction Weight**: Evaluates total token overhead added by `AGENTS.md`, `CLAUDE.md`, and `.cursorrules` to every prompt.

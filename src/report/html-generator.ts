@@ -6,7 +6,7 @@ import type { ComparisonReport } from '../metrics/comparator.js';
 import type { AgentRun } from '../types/contracts.js';
 import { REPOTWIN_VERSION } from '../version.js';
 import { readLocalEvidence, type FileEvidence } from './evidence.js';
-import { renderSizeComparison, renderArchiveTimeline, reportVisualStyles, reportCopyScript } from './report-visuals.js';
+import { renderSizeComparison, renderArchiveTimeline, renderCompoundingTokenCurve, reportVisualStyles, reportCopyScript } from './report-visuals.js';
 import { auditTokenEfficiency, type TokenEfficiencyAudit } from '../analysis/token-efficiency.js';
 
 export interface HtmlReportOptions {
@@ -171,6 +171,9 @@ export function generateHtmlReport(options: HtmlReportOptions, outputPath: strin
         <article class="metric"><span>${t('Empreinte consignes (prompts)', 'Instruction weight (per prompt)')}</span><strong>~${n(tokenEfficiency.totalInstructionTokens)}</strong><p>${t('tokens injectés par requête', 'tokens injected per turn')}</p></article>
         <article class="metric"><span>${t('Fichiers volumineux (>500 l)', 'Large source files (>500 lines)')}</span><strong>${tokenEfficiency.contextHogs.length}</strong><p>${t('fichiers à risque de re-lecture', 'files at risk of full re-reads')}</p></article>
         <article class="metric"><span>${t('Économie Twin Sieve', 'Twin Sieve savings')}</span><strong>~${tokenEfficiency.estimatedSieveSavingsPercent}%</strong><p>${t('des tokens de test préservés', 'test tokens preserved per turn')}</p></article>
+      </div>
+      <div style="margin: 20px 0;">
+        ${renderCompoundingTokenCurve(locale)}
       </div>
       ${tokenEfficiency.contextHogs.length > 0 ? `<div class="table-wrap"><table><thead><tr><th>${t('Fichier volumineux', 'Large file')}</th><th>${t('Lignes', 'Lines')}</th><th>${t('Tokens estimés', 'Estimated tokens')}</th><th>${t('Risque', 'Risk')}</th></tr></thead><tbody>${tokenEfficiency.contextHogs.map(h => `<tr><td>${code(h.path)}</td><td>${h.lines}</td><td>~${n(h.estimatedTokens)}</td><td>${badge(h.risk === 'high' ? t('Élevé (>1 000 l)', 'High (>1,000 l)') : t('Modéré', 'Moderate'), h.risk === 'high' ? 'warn' : 'neutral')}</td></tr>`).join('')}</tbody></table></div>` : ''}
       <p class="notice"><strong>${t('Optimisation recommandée : ', 'Recommended optimization: ')}</strong>${t('Exécutez vos validations via le Twin Sieve RepoTwin (`repotwin_run_checks`) pour filtrer les stack traces verbeuses et ne transmettre que les erreurs chirurgicales à l’agent.', 'Run verifications through the RepoTwin Twin Sieve (`repotwin_run_checks`) to eliminate verbose logs and transmit only surgical failure facts to the agent.')}</p>
