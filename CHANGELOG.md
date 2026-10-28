@@ -1,6 +1,15 @@
 # Changelog
 
-## 0.1.4
+## 0.3.0
+
+- **Twin Compact Sieve**: Automatically filter test runner verbosity (Jest, Vitest, Pytest, Cargo, Go) in MCP checks (`repotwin_run_checks`). Extracts surgical failure facts (file, line, diff) while eliminating verbose `node_modules` stack traces and passing tests, preserving ~75% to 85% of context tokens per turn.
+- **Context Budget & Token Efficiency Audit**: Static audit in `repotwin analyze` and MCP tool `repotwin_token_audit`. Measures base prompt instruction token overhead, flags large source files (>500 lines) that cause excessive AI re-reads, and scores repository token efficiency (0-100).
+- **Universal Multi-IDE MCP Setup**: Expand `setup-mcp` to support Cursor, Claude Desktop, Gemini Antigravity, Claude Code CLI, Windsurf, and VS Code (Roo Code / Cline) with automated 1-click detection and atomic configuration updates.
+- **English-First Bilingual Reports**: Default generated HTML reports and CLI diagnostic summaries to English, preserving instant bilingual `[ EN | FR ]` switcher.
+
+## 0.2.0
+
+- Hybrid report design, pipeline audit trail and live verification execution in isolated Git worktrees.
 
 - Add concrete gains to application reports, comparing applied files with their backups and separating observed changes from expected benefits.
 - Show the gain details in English and French, with recorded command results as evidence where available.
