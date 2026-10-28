@@ -207,17 +207,17 @@ function runAnalyze(repoPathArg?: string, options: AnalyzeOptions = {}) {
   console.log(`  ${chalk.cyan('•')} ${chalk.bold('Courbe vectorielle')}   : Générée dans le rapport HTML (--html)`);
 
   const tokenEff = analysis.tokenEfficiency;
-  console.log(chalk.bold.magenta('\n⚡ 7. BUDGET CONTEXTE & EFFICIENCE TOKENS :'));
+  console.log(chalk.bold.magenta('\n⚡ 7. CONTEXT BUDGET & TOKEN EFFICIENCY:'));
   console.log('======================================================================');
-  console.log(`  Score d'efficience token     : ${chalk.green.bold(`${tokenEff.score}/100 (Grade ${tokenEff.grade})`)}`);
-  console.log(`  Empreinte consignes (prompts): ${tokenEff.totalInstructionTokens} tokens (${tokenEff.instructionsStatus})`);
-  console.log(`  Fichiers volumineux (>500 l) : ${tokenEff.contextHogs.length} détecté(s)`);
+  console.log(`  Token Efficiency Score      : ${chalk.green.bold(`${tokenEff.score}/100 (Grade ${tokenEff.grade})`)}`);
+  console.log(`  Instruction Footprint (base): ${tokenEff.totalInstructionTokens} tokens (${tokenEff.instructionsStatus})`);
+  console.log(`  Large Source Files (>500 l) : ${tokenEff.contextHogs.length} detected`);
   if (tokenEff.contextHogs.length > 0) {
     for (const hog of tokenEff.contextHogs.slice(0, 2)) {
-      console.log(`    ${chalk.gray('↳')} ${chalk.yellow(hog.path)} (${hog.lines} lignes, ~${hog.estimatedTokens} tokens)`);
+      console.log(`    ${chalk.gray('↳')} ${chalk.yellow(hog.path)} (${hog.lines} lines, ~${hog.estimatedTokens} tokens)`);
     }
   }
-  console.log(`  Économie Twin Sieve estimée  : ${chalk.green.bold(`~${tokenEff.estimatedSieveSavingsPercent}%`)} des tokens de test préservés`);
+  console.log(`  Estimated Twin Sieve Savings: ${chalk.green.bold(`~${tokenEff.estimatedSieveSavingsPercent}%`)} test tokens preserved per turn`);
   console.log('======================================================================');
 
   // HTML Report generation if requested
