@@ -1,0 +1,454 @@
+{
+  "benchmark": "RepoTwin full MCP response, local provider-free",
+  "generatedAt": "2026-10-28T22:57:43.228Z",
+  "node": "v25.0.0",
+  "sourceRevision": "5f88337",
+  "sourceSha256": {
+    "src/mcp/server.ts": "ce38f4b2f6c688c18b3d84532ea2bdd9e51faaff2169ffcf7db513347fd10a8b",
+    "src/verification/compact-sieve.ts": "704ece2caf14a6aa60dbcec1ae755977cfaacc663175ce639967c796fc6df7ca"
+  },
+  "tokenizer": "No provider tokenizer used; estimatedTokens4Chars is ceil(JavaScript UTF-16 characters/4), not billed tokens.",
+  "sameRunMethod": "Matched raw payload derived from the actual compact MCP response by applying the current server noncompact field mapping; independent noncompact MCP call validates the real shape but runs the command again.",
+  "rows": [
+    {
+      "name": "success",
+      "kind": "test",
+      "command": "node --test suite.test.cjs",
+      "status": "passed",
+      "outputTruncated": false,
+      "diagnosticChecks": [],
+      "diagnosticsAfterCaptureLimit": [],
+      "capturedRawOutput": {
+        "characters": 0,
+        "utf8Bytes": 0
+      },
+      "compactSummaryOutput": null,
+      "extractedFailureCount": 0,
+      "observed": {
+        "compactFullResponse": {
+          "characters": 665,
+          "utf8Bytes": 665,
+          "estimatedTokens4Chars": 167
+        },
+        "rawFullResponse": {
+          "characters": 666,
+          "utf8Bytes": 666,
+          "estimatedTokens4Chars": 167
+        },
+        "deltaBytes": -1,
+        "deltaEstimatedTokens": 0,
+        "sameCapturedCommandOutput": true,
+        "compactRawOutputSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "rawModeOutputSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "durationMs": {
+          "compact": 220,
+          "raw": 172
+        }
+      },
+      "matchedSameRun": {
+        "compactFullResponse": {
+          "characters": 665,
+          "utf8Bytes": 665,
+          "estimatedTokens4Chars": 167
+        },
+        "rawFullResponse": {
+          "characters": 666,
+          "utf8Bytes": 666,
+          "estimatedTokens4Chars": 167
+        },
+        "deltaBytes": -1,
+        "deltaEstimatedTokens": 0
+      }
+    },
+    {
+      "name": "assertion",
+      "kind": "test",
+      "command": "node --test suite.test.cjs",
+      "status": "failed",
+      "outputTruncated": false,
+      "diagnosticChecks": [
+        {
+          "sentinel": "authorization rejects wrong status",
+          "inCompactFullResponse": true,
+          "inRawFullResponse": true,
+          "inCompactSummary": false
+        },
+        {
+          "sentinel": "401",
+          "inCompactFullResponse": true,
+          "inRawFullResponse": true,
+          "inCompactSummary": false
+        },
+        {
+          "sentinel": "200",
+          "inCompactFullResponse": true,
+          "inRawFullResponse": true,
+          "inCompactSummary": true
+        }
+      ],
+      "diagnosticsAfterCaptureLimit": [],
+      "capturedRawOutput": {
+        "characters": 985,
+        "utf8Bytes": 1007
+      },
+      "compactSummaryOutput": {
+        "characters": 113,
+        "utf8Bytes": 115,
+        "estimatedTokens4Chars": 29
+      },
+      "extractedFailureCount": 1,
+      "observed": {
+        "compactFullResponse": {
+          "characters": 2084,
+          "utf8Bytes": 2108,
+          "estimatedTokens4Chars": 521
+        },
+        "rawFullResponse": {
+          "characters": 1761,
+          "utf8Bytes": 1783,
+          "estimatedTokens4Chars": 441
+        },
+        "deltaBytes": 325,
+        "deltaEstimatedTokens": 80,
+        "sameCapturedCommandOutput": false,
+        "compactRawOutputSha256": "a9479f7ad4f6d6b36858baa91d3d60e7b21d997f1ce1f832fc2be13658fc94e3",
+        "rawModeOutputSha256": "57b78bfc16b4746dc65abceb2ea505580c57b38303d437cbe3d4ffa4bcbd579a",
+        "durationMs": {
+          "compact": 170,
+          "raw": 177
+        }
+      },
+      "matchedSameRun": {
+        "compactFullResponse": {
+          "characters": 2084,
+          "utf8Bytes": 2108,
+          "estimatedTokens4Chars": 521
+        },
+        "rawFullResponse": {
+          "characters": 1761,
+          "utf8Bytes": 1783,
+          "estimatedTokens4Chars": 441
+        },
+        "deltaBytes": 325,
+        "deltaEstimatedTokens": 80
+      }
+    },
+    {
+      "name": "multiline",
+      "kind": "test",
+      "command": "node --test suite.test.cjs",
+      "status": "failed",
+      "outputTruncated": false,
+      "diagnosticChecks": [
+        {
+          "sentinel": "profile object is complete",
+          "inCompactFullResponse": true,
+          "inRawFullResponse": true,
+          "inCompactSummary": false
+        },
+        {
+          "sentinel": "viewer",
+          "inCompactFullResponse": true,
+          "inRawFullResponse": true,
+          "inCompactSummary": false
+        },
+        {
+          "sentinel": "admin",
+          "inCompactFullResponse": true,
+          "inRawFullResponse": true,
+          "inCompactSummary": true
+        },
+        {
+          "sentinel": "region",
+          "inCompactFullResponse": true,
+          "inRawFullResponse": true,
+          "inCompactSummary": true
+        }
+      ],
+      "diagnosticsAfterCaptureLimit": [],
+      "capturedRawOutput": {
+        "characters": 1261,
+        "utf8Bytes": 1283
+      },
+      "compactSummaryOutput": {
+        "characters": 168,
+        "utf8Bytes": 170,
+        "estimatedTokens4Chars": 42
+      },
+      "extractedFailureCount": 1,
+      "observed": {
+        "compactFullResponse": {
+          "characters": 2480,
+          "utf8Bytes": 2504,
+          "estimatedTokens4Chars": 620
+        },
+        "rawFullResponse": {
+          "characters": 2047,
+          "utf8Bytes": 2069,
+          "estimatedTokens4Chars": 512
+        },
+        "deltaBytes": 435,
+        "deltaEstimatedTokens": 108,
+        "sameCapturedCommandOutput": false,
+        "compactRawOutputSha256": "cd80ef7a85d91b604287b7362004287e4a9f6f17f50c75b436caeb9aba601b7f",
+        "rawModeOutputSha256": "4c65f628a3d56ce36893a0b3ce0009a2553499f77c233c1897c224a88a33a6d1",
+        "durationMs": {
+          "compact": 176,
+          "raw": 171
+        }
+      },
+      "matchedSameRun": {
+        "compactFullResponse": {
+          "characters": 2480,
+          "utf8Bytes": 2504,
+          "estimatedTokens4Chars": 620
+        },
+        "rawFullResponse": {
+          "characters": 2047,
+          "utf8Bytes": 2069,
+          "estimatedTokens4Chars": 512
+        },
+        "deltaBytes": 435,
+        "deltaEstimatedTokens": 108
+      }
+    },
+    {
+      "name": "multiple-errors",
+      "kind": "test",
+      "command": "node --test suite.test.cjs",
+      "status": "failed",
+      "outputTruncated": false,
+      "diagnosticChecks": [
+        {
+          "sentinel": "first sentinel",
+          "inCompactFullResponse": true,
+          "inRawFullResponse": true,
+          "inCompactSummary": false
+        },
+        {
+          "sentinel": "second sentinel",
+          "inCompactFullResponse": true,
+          "inRawFullResponse": true,
+          "inCompactSummary": false
+        },
+        {
+          "sentinel": "third sentinel",
+          "inCompactFullResponse": true,
+          "inRawFullResponse": true,
+          "inCompactSummary": false
+        },
+        {
+          "sentinel": "ALPHA_ACTUAL",
+          "inCompactFullResponse": true,
+          "inRawFullResponse": true,
+          "inCompactSummary": false
+        },
+        {
+          "sentinel": "BETA_ACTUAL",
+          "inCompactFullResponse": true,
+          "inRawFullResponse": true,
+          "inCompactSummary": false
+        },
+        {
+          "sentinel": "GAMMA_ACTUAL",
+          "inCompactFullResponse": true,
+          "inRawFullResponse": true,
+          "inCompactSummary": false
+        }
+      ],
+      "diagnosticsAfterCaptureLimit": [],
+      "capturedRawOutput": {
+        "characters": 3047,
+        "utf8Bytes": 3077
+      },
+      "compactSummaryOutput": {
+        "characters": 623,
+        "utf8Bytes": 625,
+        "estimatedTokens4Chars": 156
+      },
+      "extractedFailureCount": 1,
+      "observed": {
+        "compactFullResponse": {
+          "characters": 5285,
+          "utf8Bytes": 5317,
+          "estimatedTokens4Chars": 1322
+        },
+        "rawFullResponse": {
+          "characters": 3876,
+          "utf8Bytes": 3906,
+          "estimatedTokens4Chars": 969
+        },
+        "deltaBytes": 1411,
+        "deltaEstimatedTokens": 353,
+        "sameCapturedCommandOutput": false,
+        "compactRawOutputSha256": "291934fe263be4fc2d00bb1fa9e62bc2995f8ab44d44e17b1d38a8b10caae03b",
+        "rawModeOutputSha256": "00299f38a7c4d33ab315503c28e3669cfbf41cff4ae528de2b2d88437b7cfd63",
+        "durationMs": {
+          "compact": 181,
+          "raw": 174
+        }
+      },
+      "matchedSameRun": {
+        "compactFullResponse": {
+          "characters": 5285,
+          "utf8Bytes": 5317,
+          "estimatedTokens4Chars": 1322
+        },
+        "rawFullResponse": {
+          "characters": 3882,
+          "utf8Bytes": 3912,
+          "estimatedTokens4Chars": 971
+        },
+        "deltaBytes": 1405,
+        "deltaEstimatedTokens": 351
+      }
+    },
+    {
+      "name": "large-logs",
+      "kind": "test",
+      "command": "node --test suite.test.cjs",
+      "status": "failed",
+      "outputTruncated": true,
+      "diagnosticChecks": [
+        {
+          "sentinel": "NOISE_0000",
+          "inCompactFullResponse": true,
+          "inRawFullResponse": true,
+          "inCompactSummary": false
+        }
+      ],
+      "diagnosticsAfterCaptureLimit": [
+        {
+          "sentinel": "large log sentinel",
+          "inCompactFullResponse": false,
+          "inRawFullResponse": false,
+          "inCompactSummary": false
+        },
+        {
+          "sentinel": "LARGE_ACTUAL",
+          "inCompactFullResponse": false,
+          "inRawFullResponse": false,
+          "inCompactSummary": false
+        },
+        {
+          "sentinel": "LARGE_EXPECTED",
+          "inCompactFullResponse": false,
+          "inRawFullResponse": false,
+          "inCompactSummary": false
+        }
+      ],
+      "capturedRawOutput": {
+        "characters": 65535,
+        "utf8Bytes": 65535
+      },
+      "compactSummaryOutput": {
+        "characters": 1448,
+        "utf8Bytes": 1450,
+        "estimatedTokens4Chars": 362
+      },
+      "extractedFailureCount": 0,
+      "observed": {
+        "compactFullResponse": {
+          "characters": 68479,
+          "utf8Bytes": 68481,
+          "estimatedTokens4Chars": 17120
+        },
+        "rawFullResponse": {
+          "characters": 66993,
+          "utf8Bytes": 66993,
+          "estimatedTokens4Chars": 16749
+        },
+        "deltaBytes": 1488,
+        "deltaEstimatedTokens": 371,
+        "sameCapturedCommandOutput": true,
+        "compactRawOutputSha256": "2b1fe3a8c86a7fe505ee7b04accdd95a17d48ab96c40104c3f15689fc4a2ded1",
+        "rawModeOutputSha256": "2b1fe3a8c86a7fe505ee7b04accdd95a17d48ab96c40104c3f15689fc4a2ded1",
+        "durationMs": {
+          "compact": 173,
+          "raw": 176
+        }
+      },
+      "matchedSameRun": {
+        "compactFullResponse": {
+          "characters": 68479,
+          "utf8Bytes": 68481,
+          "estimatedTokens4Chars": 17120
+        },
+        "rawFullResponse": {
+          "characters": 66993,
+          "utf8Bytes": 66993,
+          "estimatedTokens4Chars": 16749
+        },
+        "deltaBytes": 1488,
+        "deltaEstimatedTokens": 371
+      }
+    },
+    {
+      "name": "typescript-errors",
+      "kind": "build",
+      "command": "node /Users/hmannai/Downloads/repotwin/node_modules/typescript/bin/tsc --noEmit --pretty false",
+      "status": "failed",
+      "outputTruncated": false,
+      "diagnosticChecks": [
+        {
+          "sentinel": "broken.ts",
+          "inCompactFullResponse": true,
+          "inRawFullResponse": true,
+          "inCompactSummary": true
+        },
+        {
+          "sentinel": "TS2322",
+          "inCompactFullResponse": true,
+          "inRawFullResponse": true,
+          "inCompactSummary": true
+        }
+      ],
+      "diagnosticsAfterCaptureLimit": [],
+      "capturedRawOutput": {
+        "characters": 296,
+        "utf8Bytes": 296
+      },
+      "compactSummaryOutput": {
+        "characters": 430,
+        "utf8Bytes": 432,
+        "estimatedTokens4Chars": 108
+      },
+      "extractedFailureCount": 1,
+      "observed": {
+        "compactFullResponse": {
+          "characters": 2025,
+          "utf8Bytes": 2027,
+          "estimatedTokens4Chars": 507
+        },
+        "rawFullResponse": {
+          "characters": 1054,
+          "utf8Bytes": 1054,
+          "estimatedTokens4Chars": 264
+        },
+        "deltaBytes": 973,
+        "deltaEstimatedTokens": 243,
+        "sameCapturedCommandOutput": true,
+        "compactRawOutputSha256": "48581040a48cb832b1bb56180b947e5024fed3a29217fd3730716f280ecb1e69",
+        "rawModeOutputSha256": "48581040a48cb832b1bb56180b947e5024fed3a29217fd3730716f280ecb1e69",
+        "durationMs": {
+          "compact": 284,
+          "raw": 279
+        }
+      },
+      "matchedSameRun": {
+        "compactFullResponse": {
+          "characters": 2025,
+          "utf8Bytes": 2027,
+          "estimatedTokens4Chars": 507
+        },
+        "rawFullResponse": {
+          "characters": 1054,
+          "utf8Bytes": 1054,
+          "estimatedTokens4Chars": 264
+        },
+        "deltaBytes": 973,
+        "deltaEstimatedTokens": 243
+      }
+    }
+  ]
+}

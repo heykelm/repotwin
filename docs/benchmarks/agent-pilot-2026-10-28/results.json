@@ -1,0 +1,98 @@
+{
+  "scope": "diagnosis-only; one fixture; two repetitions per variant; no implementation or quota savings demonstrated",
+  "order": "ABBA; cache uncontrolled and separately reported",
+  "calls": [
+    {
+      "trial": 1,
+      "variant": "raw",
+      "requestedModel": "gpt-6.1-sol",
+      "inputSha256": "43aa5a70bc46c62ea4fe2a13365d5ef0380ffb8fdaa9d9d9e157b43b24b396ae",
+      "payloadCharacters": 2687,
+      "exitCode": 0,
+      "durationSeconds": 7.189,
+      "usage": [
+        {
+          "input_tokens": 15056,
+          "cached_input_tokens": 0,
+          "cache_write_input_tokens": 0,
+          "output_tokens": 192,
+          "reasoning_output_tokens": 0
+        }
+      ],
+      "answers": [
+        "{\n  \"diagnosis\": \"The test failed because the authorization status was 401 while the assertion expected 200. The output does not establish whether the behavior or the test expectation is incorrect.\",\n  \"evidence\": [\n    \"Subtest `authorization rejects wrong status` reports `ERR_ASSERTION`: expected 200, actual 401, operator `strictEqual`, at `suite.test.cjs:3:57`.\",\n    \"`npm run test` exited with code 1; the test summary reports 0 passed and 1 failed. Output was not truncated.\",\n    \"The MCP response reports `allPassed: false` and `canApply: false`; `candidateIntact` and `noInstructionRegression` are both true.\"\n  ],\n  \"missing_information\": [\n    \"The intended authorization contract and test setup are needed to determine whether 200 or 401 is correct.\"\n  ]\n}"
+      ],
+      "unexpectedTools": [],
+      "trace": "1-raw.jsonl"
+    },
+    {
+      "trial": 2,
+      "variant": "compact",
+      "requestedModel": "gpt-6.1-sol",
+      "inputSha256": "80a72a0764ead8d2f67cc900058eef05cb025caa4bfa0e982d594a598c69ca9d",
+      "payloadCharacters": 2972,
+      "exitCode": 0,
+      "durationSeconds": 7.008,
+      "usage": [
+        {
+          "input_tokens": 15129,
+          "cached_input_tokens": 0,
+          "cache_write_input_tokens": 0,
+          "output_tokens": 186,
+          "reasoning_output_tokens": 0
+        }
+      ],
+      "answers": [
+        "{\n  \"diagnosis\": \"One test fails because the actual status is 401 while the assertion expects 200. The outer \u201ctest failed\u201d error reports this same failure, not a separate mismatch.\",\n  \"evidence\": [\n    \"rawOutput: \u201cauthorization rejects wrong status\u201d fails with ERR_ASSERTION, actual: 401, expected: 200, operator: strictEqual, at suite.test.cjs:3:57.\",\n    \"npm run test exits with code 1; TAP reports 1 test, 0 passed, 1 failed.\",\n    \"The extracted diagnostic omits the actual value; the untruncated rawOutput supplies it. allPassed and canApply are false.\"\n  ],\n  \"missing_information\": [\n    \"The output does not establish whether 200 is the correct expectation or why the actual status is 401.\"\n  ]\n}"
+      ],
+      "unexpectedTools": [],
+      "trace": "2-compact.jsonl"
+    },
+    {
+      "trial": 3,
+      "variant": "compact",
+      "requestedModel": "gpt-6.1-sol",
+      "inputSha256": "80a72a0764ead8d2f67cc900058eef05cb025caa4bfa0e982d594a598c69ca9d",
+      "payloadCharacters": 2972,
+      "exitCode": 0,
+      "durationSeconds": 7.066,
+      "usage": [
+        {
+          "input_tokens": 15129,
+          "cached_input_tokens": 0,
+          "cache_write_input_tokens": 0,
+          "output_tokens": 175,
+          "reasoning_output_tokens": 0
+        }
+      ],
+      "answers": [
+        "{\n  \"diagnosis\": \"The test fails because an authorization status is 401 while the assertion expects 200. The enclosing suite failure reflects this same assertion failure.\",\n  \"evidence\": [\n    \"rawOutput names the failing subtest: 'authorization rejects wrong status'.\",\n    \"The assertion reports actual: 401, expected: 200, operator: 'strictEqual', at suite.test.cjs:3:57.\",\n    \"npm run test exited with code 1; TAP reports 1 test, 0 passed, 1 failed.\",\n    \"The extracted failure omits the actual value; the untruncated rawOutput provides the concrete mismatch.\"\n  ],\n  \"missing_information\": [\n    \"The supplied output does not establish whether the authorization behavior or the expected status is incorrect.\"\n  ]\n}"
+      ],
+      "unexpectedTools": [],
+      "trace": "3-compact.jsonl"
+    },
+    {
+      "trial": 4,
+      "variant": "raw",
+      "requestedModel": "gpt-6.1-sol",
+      "inputSha256": "43aa5a70bc46c62ea4fe2a13365d5ef0380ffb8fdaa9d9d9e157b43b24b396ae",
+      "payloadCharacters": 2687,
+      "exitCode": 0,
+      "durationSeconds": 6.903,
+      "usage": [
+        {
+          "input_tokens": 15056,
+          "cached_input_tokens": 12288,
+          "cache_write_input_tokens": 0,
+          "output_tokens": 177,
+          "reasoning_output_tokens": 0
+        }
+      ],
+      "answers": [
+        "{\n  \"diagnosis\": \"The test fails because the actual status is 401 while the assertion expects 200. The output does not establish whether the implementation or test expectation is wrong.\",\n  \"evidence\": [\n    \"\u201cauthorization rejects wrong status\u201d reports ERR_ASSERTION: expected 200, actual 401, operator strictEqual, at suite.test.cjs:3:57.\",\n    \"npm run test exited with code 1; the test summary reports 0 passed and 1 failed. Output was not truncated.\",\n    \"The MCP response reports allPassed: false and canApply: false; candidateIntact and noInstructionRegression are both true.\"\n  ],\n  \"missing_information\": [\n    \"The intended authorization behavior and test setup are needed to determine whether 200 or 401 is correct.\"\n  ]\n}"
+      ],
+      "unexpectedTools": [],
+      "trace": "4-raw.jsonl"
+    }
+  ]
+}

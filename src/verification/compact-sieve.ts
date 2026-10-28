@@ -100,6 +100,11 @@ export function extractFailuresFromOutput(output: string, kind: ValidationKind):
       if (!currentFailure) {
         currentFailure = { stackSnippet: [] };
       }
+      if (currentFailure.message) {
+        const testName: string | undefined = currentFailure.testName;
+        pushCurrent();
+        currentFailure = { testName, stackSnippet: [] };
+      }
       currentFailure.file = goAssertMatch[1];
       currentFailure.line = parseInt(goAssertMatch[2], 10);
       currentFailure.message = goAssertMatch[3].trim();
@@ -198,6 +203,13 @@ export function extractFailuresFromOutput(output: string, kind: ValidationKind):
       } else if (diffLines.length > 0) {
         finalizeDiff();
       }
+    }
+
+    // Cargo displays assertion operands on separate lines after the panic.
+    const cargoValue = line.match(/^(left|right):\s*(.*)$/);
+    if (cargoValue && currentFailure) {
+      const label = cargoValue[1] === 'left' ? 'received' : 'expected';
+      currentFailure.diff = [currentFailure.diff, `${label}: ${cargoValue[2]}`].filter(Boolean).join('\n');
     }
 
     // 6. File & Line matching

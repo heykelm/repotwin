@@ -1,0 +1,37 @@
+{
+  "allPassed": false,
+  "canApply": false,
+  "totalCommands": 1,
+  "passedCount": 0,
+  "failedCount": 1,
+  "candidateIntact": true,
+  "noInstructionRegression": true,
+  "tokenEfficiency": {
+    "compactMode": true,
+    "measuredSavings": null,
+    "note": "Failure output includes the captured raw diagnostic; token savings have not been measured. Output may be truncated as indicated per command."
+  },
+  "failures": [
+    {
+      "id": "d3bc8af31f3b99ae",
+      "project": "bench-assertion",
+      "subprojectPath": ".",
+      "kind": "test",
+      "status": "failed",
+      "command": "npm run test",
+      "exitCode": 1,
+      "durationMs": 170,
+      "errorOutput": "❌ FAILED: 1 failure detected in test execution.\nError: Assertion failed (value mismatch)\nDiff:\n    expected: 200,",
+      "rawOutput": "> bench-assertion@1.0.0 test\n> node --test suite.test.cjs\n\n✖ authorization rejects wrong status (0.620208ms)\nℹ tests 1\nℹ suites 0\nℹ pass 0\nℹ fail 1\nℹ cancelled 0\nℹ skipped 0\nℹ todo 0\nℹ duration_ms 40.988792\n\n✖ failing tests:\n\ntest at suite.test.cjs:3:1\n✖ authorization rejects wrong status (0.620208ms)\n  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n  \n  401 !== 200\n  \n      at TestContext.<anonymous> (/private/var/folders/wm/4dvh2_2j4153d_m4m9bgqtd88g4vlc/T/repotwin-context-bench-NgLsiR/twins/assertion-candidate-1793228256519-4da4b82e/suite.test.cjs:3:57)\n      at Test.runInAsyncScope (node:async_hooks:213:14)\n      at Test.run (node:internal/test_runner/test:1106:25)\n      at Test.start (node:internal/test_runner/test:1003:17)\n      at startSubtestAfterBootstrap (node:internal/test_runner/harness:358:17) {\n    generatedMessage: true,\n    code: 'ERR_ASSERTION',\n    actual: 401,\n    expected: 200,\n    operator: 'strictEqual',\n    diff: 'simple'\n  }",
+      "outputTruncated": false,
+      "extractedFailures": [
+        {
+          "stackSnippet": [],
+          "diff": "    expected: 200,",
+          "message": "Assertion failed (value mismatch)"
+        }
+      ]
+    }
+  ],
+  "passedCommands": []
+}

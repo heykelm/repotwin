@@ -1,0 +1,1 @@
+{"type": "object", "properties": {"diagnosis": {"type": "string"}, "evidence": {"type": "array", "items": {"type": "string"}}, "missing_information": {"type": "array", "items": {"type": "string"}}}, "required": ["diagnosis", "evidence", "missing_information"], "additionalProperties": false}

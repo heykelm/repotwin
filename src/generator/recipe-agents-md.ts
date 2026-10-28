@@ -111,8 +111,7 @@ ${subprojectRows}
     })),
     tokenOptimization: {
       compactRunner: true,
-      sieveTerminalNoise: true,
-      estimatedSavings: "~75%"
+      sieveTerminalNoise: true
     },
     safety: {
       ...(existingConfig.safety && typeof existingConfig.safety === 'object' && !Array.isArray(existingConfig.safety) ? existingConfig.safety : {}),

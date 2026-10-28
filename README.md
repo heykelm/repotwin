@@ -42,35 +42,18 @@ The Studio opens on `http://127.0.0.1:<port>` with loopback-only isolation. It u
 
 ## ⚡ Token Efficiency & Context Budget (New in v0.3.0)
 
-When AI coding assistants (Claude Code, Cursor, Antigravity, Codex) iterate on code, their token consumption compounds quadratically on every tool call and test failure. Raw terminal dumps from test runners (`npm test`, `pytest`, `cargo test`) inject hundreds of lines of noise, warnings, and internal stack traces into the model's active window, exhausting subscription quotas within minutes.
+Test output can consume part of an agent's context. RepoTwin can summarize captured failures when verifying a RepoTwin candidate in an isolated worktree.
 
-RepoTwin v0.3.0 introduces a dedicated off-context protection layer:
+### Twin Compact Sieve (`repotwin_run_checks`)
 
-### 1. The Twin Compact Sieve (`repotwin_run_checks`)
-When an AI agent executes test commands via RepoTwin's MCP server, the test runs inside an isolated Git worktree (the Twin). RepoTwin intercepts raw output and sieves out 100% of the noise:
-- **Passing tests**: collapsed into a single summary line (`PASS: 47 passed in 1.2s`).
-- **Failed tests**: surgically extracts the exact failed test title, location (`file:line`), error message, and expected vs. received diff, discarding `node_modules` stack traces and terminal escape sequences.
+Failure summaries are best effort. The MCP response also includes the captured raw output so that partially recognized failures remain visible. Output capture is bounded; `outputTruncated` indicates when part of the command output was not captured. Successful commands return their status without their logs.
 
-### 2. Illustrative Context Compounding Model (Simulated 4-Turn Cycle)
-
-> **Note on Token Accounting**: Token counts use the standard character ÷ 4 approximation. Actual LLM tokenization varies by provider and tokenizer. RepoTwin does not claim verified billing reductions without recorded provider trace comparisons.
-
-| Iteration Step | Without RepoTwin (Raw Terminal) | With RepoTwin (Twin Sieve) | Noise Reduction |
-| :--- | :--- | :--- | :--- |
-| **Output size per test run** | ~350 lines (~3,200 tokens) | ~5 to 8 lines (~60 tokens) | **-98% terminal noise** |
-| **Turn 1 (Prompt & initial run)** | ~4,000 tokens | ~4,000 tokens | Base prompt |
-| **Turn 2 (1st test failure)** | ~11,200 tokens cumulative | ~5,100 tokens cumulative | Stack traces stripped |
-| **Turn 3 (2nd test failure)** | ~19,400 tokens cumulative | ~6,200 tokens cumulative | Multi-turn noise prevented |
-| **Turn 4 (Resolved with fix)** | ~28,600 tokens cumulative | ~7,300 tokens cumulative | **~75% context preserved** |
-
-<p align="center">
-  <img src="docs/assets/token-compounding-curve.svg" alt="RepoTwin Token Compounding Curve" width="100%" />
-</p>
+**No token, quota, or cost savings have been measured.** A shorter summary does not establish savings for the whole agent task, and including raw diagnostics may make the response larger.
 
 ### 3. Context Budget Audit (`repotwin analyze`)
 RepoTwin statically audits your repository for AI token efficiency:
-- **Instruction Weight**: Evaluates total token overhead added by `AGENTS.md`, `CLAUDE.md`, and `.cursorrules` to every prompt.
-- **Context Hogs**: Identifies large monolithic source files (>500 lines) that cause AI agents to perform massive, repetitive whole-file reads.
+- **Instruction Weight**: Estimates the size of selected instruction files. Actual loading and tokenization depend on the agent.
+- **Context Hogs**: Identifies source files over 500 lines for inspection; it does not measure agent reads.
 - **Command Verbosity**: Flags test scripts lacking quiet/compact flags.
 
 ## Cross-Platform & Resource Efficiency

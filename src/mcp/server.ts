@@ -413,38 +413,25 @@ export function createMcpServer(defaultRepoPath: string = process.cwd()): Server
           const passed = candidate.commandResults.filter(result => result.status === 'passed');
 
           const isCompact = args.compactOutput !== false;
-          let rawErrorChars = 0;
-          let compactErrorChars = 0;
-
           const failures = failed.map(f => {
-            const sieve = sieveCommandOutput(f.output, f.kind, f.status);
-            const rawChars = f.output.length;
-            const compactChars = sieve.compactOutput.length;
-            rawErrorChars += rawChars;
-            compactErrorChars += isCompact ? compactChars : Math.min(2000, rawChars);
-
+            const sieve = isCompact ? sieveCommandOutput(f.output, f.kind, f.status) : undefined;
             return {
               id: f.id,
               project: f.project,
               subprojectPath: f.relPath,
               kind: f.kind,
+              status: f.status,
               command: f.display,
               exitCode: f.exitCode,
               durationMs: f.durationMs,
-              errorOutput: isCompact ? sieve.compactOutput : f.output.slice(-2000),
-              extractedFailures: isCompact && sieve.failures.length > 0 ? sieve.failures : undefined,
-              diagnosticsReduction: isCompact ? {
-                rawCharacters: rawChars,
-                compactCharacters: compactChars,
-                estimatedTokensPreserved: Math.max(0, Math.ceil((rawChars - compactChars) / 4)),
-                reductionPercent: rawChars > 0 ? Math.round(((rawChars - compactChars) / rawChars) * 100) : 0
-              } : undefined
+              // The parser is best-effort. Keep the captured diagnostic so an
+              // unrecognized or partial extraction cannot hide an error.
+              errorOutput: sieve ? sieve.compactOutput : f.output,
+              rawOutput: isCompact ? f.output : undefined,
+              outputTruncated: f.outputTruncated,
+              extractedFailures: sieve && sieve.failures.length > 0 ? sieve.failures : undefined
             };
           });
-
-          const charsPreserved = Math.max(0, rawErrorChars - compactErrorChars);
-          const estimatedTokensPreserved = Math.ceil(charsPreserved / 4);
-          const reductionPercent = rawErrorChars > 0 ? Math.round((charsPreserved / rawErrorChars) * 100) : 0;
 
           return {
             content: [
@@ -460,15 +447,10 @@ export function createMcpServer(defaultRepoPath: string = process.cwd()): Server
                   candidateIntact,
                   noInstructionRegression: introduced.length === 0,
                   cleanupError,
-                  tokenEfficiency: isCompact && failed.length > 0 ? {
-                    compactMode: true,
-                    rawErrorCharacters: rawErrorChars,
-                    compactCharactersReturned: compactErrorChars,
-                    estimatedTokensPreserved,
-                    reductionPercent,
-                    note: 'Payload size estimate based on characters ÷ 4. Provider billing depends on tokenizer and caching.'
-                  } : {
-                    compactMode: isCompact
+                  tokenEfficiency: {
+                    compactMode: isCompact,
+                    measuredSavings: null,
+                    note: 'Failure output includes the captured raw diagnostic; token savings have not been measured. Output may be truncated as indicated per command.'
                   },
                   failures,
                   passedCommands: passed.map(p => ({

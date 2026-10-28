@@ -170,5 +170,23 @@ Tests:      1 failed, 1 total
     expect(result.compactOutput).toContain('FAILED');
     expect(result.metrics.rawCharacters).toBe(0);
   });
+  it('retains multiple Go assertions and Cargo assertion values', () => {
+    const go = sieveCommandOutput(`--- FAIL: TestPrices (0.00s)
+    price_test.go:42: expected 100, got 200
+    price_test.go:43: expected EUR, got USD
+FAIL`, 'test', 'failed');
+    expect(go.compactOutput).toContain('expected 100, got 200');
+    expect(go.compactOutput).toContain('expected EUR, got USD');
+    const cargo = sieveCommandOutput(`test tests::price ... FAILED
+thread 'tests::price' panicked at src/lib.rs:42:5:
+assertion \`left == right\` failed
+  left: 200
+ right: 100
+failures:
+    tests::price`, 'test', 'failed');
+    expect(cargo.compactOutput).toContain('received: 200');
+    expect(cargo.compactOutput).toContain('expected: 100');
+  });
+
 });
 

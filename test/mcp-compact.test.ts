@@ -127,7 +127,10 @@ describe('MCP Compact & Token Efficiency Tools', () => {
     expect(verified.failures[0].errorOutput).toContain('test/auth.test.ts:15');
     expect(verified.failures[0].errorOutput).toContain('expected 401 to deeply equal 200');
     expect(verified.tokenEfficiency.compactMode).toBe(true);
-    expect(verified.tokenEfficiency.rawErrorCharacters).toBeGreaterThan(0);
+    expect(verified.tokenEfficiency.measuredSavings).toBeNull();
+    expect(verified.failures[0].rawOutput).toContain('expected 401 to deeply equal 200');
+    expect(verified.failures[0].outputTruncated).toBe(false);
+    expect(verified.tokenEfficiency.compactCharactersReturned).toBeUndefined();
 
     await client.close();
   });

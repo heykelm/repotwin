@@ -201,10 +201,7 @@ function runAnalyze(repoPathArg?: string, options: AnalyzeOptions = {}) {
   console.log(`  ${chalk.green('•')} ${chalk.bold('AGENTS.md proposé')}      : ${recipe.agentsMdContent.length} car. (~${approxTokens(recipe.agentsMdContent)} tokens, estimation car./4)`);
   console.log(chalk.dim('    Ce fichier peut être chargé dans chaque prompt : un fichier plus long coûte des tokens, il n\'en économise pas.'));
 
-  console.log(chalk.bold.magenta('\n📈 6. PROJECTION D\'EFFICIENCE DU FORFAIT IA (100 tâches) :'));
-  console.log(`  ${chalk.cyan('•')} ${chalk.bold('Autonomie du forfait')} : ${chalk.green.bold('+94%')} de tâches réalisables avant épuisement du quota mensuel`);
-  console.log(`  ${chalk.cyan('•')} ${chalk.bold('Tokens préservés')}     : ${chalk.green.bold('~2.28M')} tokens économisés (élimination des re-scans aveugles)`);
-  console.log(`  ${chalk.cyan('•')} ${chalk.bold('Courbe vectorielle')}   : Générée dans le rapport HTML (--html)`);
+  console.log(chalk.dim('\n  Impact sur le forfait IA : non mesuré.'));
 
   const tokenEff = analysis.tokenEfficiency;
   console.log(chalk.bold.magenta('\n⚡ 7. CONTEXT BUDGET & TOKEN EFFICIENCY:'));
@@ -219,7 +216,7 @@ function runAnalyze(repoPathArg?: string, options: AnalyzeOptions = {}) {
   }
   const sieveStatus = typeof tokenEff.estimatedSieveSavingsPercent === 'number'
     ? `${chalk.green.bold(`~${tokenEff.estimatedSieveSavingsPercent}%`)} test tokens preserved per turn`
-    : `${chalk.dim('Not measured (requires running checks)')}`;
+    : `${chalk.dim('Not measured')}`;
   console.log(`  Twin Sieve Status           : ${sieveStatus}`);
   console.log('======================================================================');
 
