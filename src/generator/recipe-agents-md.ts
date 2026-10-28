@@ -53,7 +53,7 @@ Always verify changes before marking a task complete:
 | :--- | :--- | :--- | :--- | :--- |
 ${subprojectRows}
 
-- **Token Budget Protection :** When validating changes, prefer using the \`repotwin_run_checks\` MCP tool. It automatically strips test runner verbosity and provides surgical error diagnostics to prevent context exhaustion.
+- **Isolated Verification :** When validating a candidate fix via RepoTwin MCP, use \`repotwin_run_checks\` on your candidate twin. It executes checks in an isolated worktree and provides compact, surgical error diagnostics to preserve context budget.
 `.trim();
 
   // 4. Build Architecture & Central Source of Truth Section

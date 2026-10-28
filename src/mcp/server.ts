@@ -413,13 +413,16 @@ export function createMcpServer(defaultRepoPath: string = process.cwd()): Server
           const passed = candidate.commandResults.filter(result => result.status === 'passed');
 
           const isCompact = args.compactOutput !== false;
-          let totalRawTokens = 0;
-          let totalCompactTokens = 0;
+          let rawErrorChars = 0;
+          let compactErrorChars = 0;
 
           const failures = failed.map(f => {
             const sieve = sieveCommandOutput(f.output, f.kind, f.status);
-            totalRawTokens += sieve.metrics.estimatedRawTokens;
-            totalCompactTokens += isCompact ? sieve.metrics.estimatedCompactTokens : sieve.metrics.estimatedRawTokens;
+            const rawChars = f.output.length;
+            const compactChars = sieve.compactOutput.length;
+            rawErrorChars += rawChars;
+            compactErrorChars += isCompact ? compactChars : Math.min(2000, rawChars);
+
             return {
               id: f.id,
               project: f.project,
@@ -430,23 +433,18 @@ export function createMcpServer(defaultRepoPath: string = process.cwd()): Server
               durationMs: f.durationMs,
               errorOutput: isCompact ? sieve.compactOutput : f.output.slice(-2000),
               extractedFailures: isCompact && sieve.failures.length > 0 ? sieve.failures : undefined,
-              tokenSavings: isCompact ? {
-                rawTokens: sieve.metrics.estimatedRawTokens,
-                compactTokens: sieve.metrics.estimatedCompactTokens,
-                tokensPreserved: sieve.metrics.tokensPreserved,
-                savingsPercent: sieve.metrics.savingsPercent
+              diagnosticsReduction: isCompact ? {
+                rawCharacters: rawChars,
+                compactCharacters: compactChars,
+                estimatedTokensPreserved: Math.max(0, Math.ceil((rawChars - compactChars) / 4)),
+                reductionPercent: rawChars > 0 ? Math.round(((rawChars - compactChars) / rawChars) * 100) : 0
               } : undefined
             };
           });
 
-          for (const p of passed) {
-            const sieve = sieveCommandOutput(p.output, p.kind, p.status);
-            totalRawTokens += sieve.metrics.estimatedRawTokens;
-            totalCompactTokens += isCompact ? sieve.metrics.estimatedCompactTokens : sieve.metrics.estimatedRawTokens;
-          }
-
-          const totalTokensPreserved = Math.max(0, totalRawTokens - totalCompactTokens);
-          const overallSavingsPercent = totalRawTokens > 0 ? Math.round((totalTokensPreserved / totalRawTokens) * 100) : 0;
+          const charsPreserved = Math.max(0, rawErrorChars - compactErrorChars);
+          const estimatedTokensPreserved = Math.ceil(charsPreserved / 4);
+          const reductionPercent = rawErrorChars > 0 ? Math.round((charsPreserved / rawErrorChars) * 100) : 0;
 
           return {
             content: [
@@ -462,15 +460,15 @@ export function createMcpServer(defaultRepoPath: string = process.cwd()): Server
                   candidateIntact,
                   noInstructionRegression: introduced.length === 0,
                   cleanupError,
-                  tokenEfficiency: isCompact ? {
+                  tokenEfficiency: isCompact && failed.length > 0 ? {
                     compactMode: true,
-                    estimatedRawTokens: totalRawTokens,
-                    compactTokensReturned: totalCompactTokens,
-                    tokensPreserved: totalTokensPreserved,
-                    savingsPercent: overallSavingsPercent,
-                    contextProtection: `${totalTokensPreserved} tokens kept out of agent context window.`
+                    rawErrorCharacters: rawErrorChars,
+                    compactCharactersReturned: compactErrorChars,
+                    estimatedTokensPreserved,
+                    reductionPercent,
+                    note: 'Payload size estimate based on characters ÷ 4. Provider billing depends on tokenizer and caching.'
                   } : {
-                    compactMode: false
+                    compactMode: isCompact
                   },
                   failures,
                   passedCommands: passed.map(p => ({

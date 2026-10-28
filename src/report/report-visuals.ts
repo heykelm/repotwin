@@ -33,11 +33,11 @@ export function renderCompoundingTokenCurve(locale: 'fr' | 'en'): string {
     ? 'Active Context Window: Raw Terminal vs. RepoTwin Twin Sieve'
     : 'Fenêtre de Contexte Active : Terminal Brut vs. Twin Sieve RepoTwin';
   const subtitle = en
-    ? 'REPOTWIN V0.3.0 · CONTEXT COMPOUNDING IMPACT OVER 5 DEBUG ITERATIONS'
-    : 'REPOTWIN V0.3.0 · IMPACT DE L\'ACCUMULATION DE CONTEXTE SUR 5 ITÉRATIONS';
+    ? 'REPOTWIN V0.3.0 · ILLUSTRATIVE MODEL (SIMULATED 5-TURN DEBUG CYCLE)'
+    : 'REPOTWIN V0.3.0 · MODÈLE ILLUSTRATIF (SIMULATION SUR 5 TOURS DE DEBUG)';
   const rawLegend = en ? 'Without RepoTwin (Raw O(N²))' : 'Sans RepoTwin (Brut O(N²))';
-  const twinLegend = en ? 'With RepoTwin (~75% Saved)' : 'Avec RepoTwin (~75% Économisés)';
-  const badgeText = en ? '⚡ 75% TOKENS PRESERVED' : '⚡ 75% DE TOKENS PRÉSERVÉS';
+  const twinLegend = en ? 'With Twin Sieve (~75% Noise Filtered)' : 'Avec Twin Sieve (~75% Filtré)';
+  const badgeText = en ? '⚡ ~75% NOISE FILTERED (MODEL)' : '⚡ ~75% DE BRUIT FILTRÉ (MODÈLE)';
 
   return `<div class="token-curve-wrap" style="margin: 20px 0;">
     <svg viewBox="0 0 760 360" width="100%" height="auto" role="img" aria-label="${title}" style="border-radius: 14px; border: 1px solid var(--border); background: #080e18;">

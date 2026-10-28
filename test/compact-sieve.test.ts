@@ -18,7 +18,7 @@ describe('Compact Sieve - Noise reduction & Token preservation', () => {
     expect(estimateTokens('abcdefghij')).toBe(3);
   });
 
-  it('compacts successful test runs into a single summary line with massive savings', () => {
+  it('compacts realistic successful test runs into a single summary line', () => {
     const rawSuccessOutput = `
       RUN  v1.4.0 /Users/project
       ✓ test/auth.test.ts (4 tests) 12ms
@@ -33,15 +33,14 @@ describe('Compact Sieve - Noise reduction & Token preservation', () => {
       
       [DeprecationWarning: Buffer() is deprecated due to security...]
       [DeprecationWarning: punycode is deprecated...]
-    `.repeat(5);
+    `;
 
     const result = sieveCommandOutput(rawSuccessOutput, 'test', 'passed');
 
     expect(result.status).toBe('passed');
     expect(result.compactOutput).toContain('PASS');
     expect(result.compactOutput).toContain('47 passed');
-    expect(result.metrics.savingsPercent).toBeGreaterThan(70);
-    expect(result.metrics.tokensPreserved).toBeGreaterThan(200);
+    expect(result.metrics.savingsPercent).toBeGreaterThan(50);
     expect(result.failures).toHaveLength(0);
   });
 
@@ -113,6 +112,56 @@ FAILED tests/test_api.py::test_get_user - AssertionError: assert 404 == 200
     expect(failure?.file).toBe('tests/test_api.py');
     expect(result.compactOutput).toContain('tests/test_api.py');
     expect(result.compactOutput).toContain('test_get_user');
+  });
+
+  it('surgically extracts Go test failures without losing assertion or location', () => {
+    const rawGoOutput = `
+=== RUN   TestPrice
+--- FAIL: TestPrice (0.00s)
+    price_test.go:42: expected 100, got 200
+FAIL
+FAIL\tgithub.com/my/pkg\t0.005s
+FAIL
+`;
+    const result = sieveCommandOutput(rawGoOutput, 'test', 'failed');
+    expect(result.status).toBe('failed');
+    expect(result.failures).toHaveLength(1);
+    expect(result.failures[0].testName).toBe('TestPrice');
+    expect(result.failures[0].file).toBe('price_test.go');
+    expect(result.failures[0].line).toBe(42);
+    expect(result.failures[0].message).toBe('expected 100, got 200');
+    expect(result.compactOutput).toContain('price_test.go:42');
+    expect(result.compactOutput).toContain('expected 100, got 200');
+  });
+
+  it('captures Jest multiline object diffs without dropping expected/received values', () => {
+    const rawJestDiffOutput = `
+FAIL test/billing.test.ts
+  ● Billing Suite > should calculate price
+
+    expect(received).toEqual(expected)
+
+    - Expected  - 1
+    + Received  + 1
+
+      Object {
+    -   "price": 100,
+    +   "price": 200,
+      }
+
+      at Object.<anonymous> (test/billing.test.ts:42:18)
+
+Test Files: 1 failed, 1 total
+Tests:      1 failed, 1 total
+`;
+    const result = sieveCommandOutput(rawJestDiffOutput, 'test', 'failed');
+    expect(result.status).toBe('failed');
+    expect(result.failures).toHaveLength(1);
+    expect(result.failures[0].file).toBe('test/billing.test.ts');
+    expect(result.failures[0].line).toBe(42);
+    expect(result.compactOutput).toContain('"price": 100');
+    expect(result.compactOutput).toContain('"price": 200');
+    expect(result.compactOutput).toContain('test/billing.test.ts:42');
   });
 
   it('handles empty or unrecognized output without crashing', () => {

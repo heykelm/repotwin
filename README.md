@@ -51,14 +51,17 @@ When an AI agent executes test commands via RepoTwin's MCP server, the test runs
 - **Passing tests**: collapsed into a single summary line (`PASS: 47 passed in 1.2s`).
 - **Failed tests**: surgically extracts the exact failed test title, location (`file:line`), error message, and expected vs. received diff, discarding `node_modules` stack traces and terminal escape sequences.
 
-### 2. Measured Context Savings (Real Numbers)
+### 2. Illustrative Context Compounding Model (Simulated 4-Turn Cycle)
 
-| Workflow Metric | Without RepoTwin (Raw Terminal) | With RepoTwin (Twin Sieve) | Net Preservation |
+> **Note on Token Accounting**: Token counts use the standard character ÷ 4 approximation. Actual LLM tokenization varies by provider and tokenizer. RepoTwin does not claim verified billing reductions without recorded provider trace comparisons.
+
+| Iteration Step | Without RepoTwin (Raw Terminal) | With RepoTwin (Twin Sieve) | Noise Reduction |
 | :--- | :--- | :--- | :--- |
-| **Output size per test run** | ~350 lines (~3,200 tokens) | ~5 to 8 lines (~60 tokens) | **-98% noise eliminated** |
-| **Debug iteration (4 attempts)** | ~58,000 tokens consumed | ~14,500 tokens consumed | **~75% context preserved** |
-| **Daily active developer impact** | Burns 5-hour quota in < 1 hour | Extends session endurance | **2.5x longer quota stamina** |
-| **Direct API cost (Sonnet 3.5/3.7)** | Standard rate | -$3 to -$5 / day per dev | **~$70 - $100 / month saved** |
+| **Output size per test run** | ~350 lines (~3,200 tokens) | ~5 to 8 lines (~60 tokens) | **-98% terminal noise** |
+| **Turn 1 (Prompt & initial run)** | ~4,000 tokens | ~4,000 tokens | Base prompt |
+| **Turn 2 (1st test failure)** | ~11,200 tokens cumulative | ~5,100 tokens cumulative | Stack traces stripped |
+| **Turn 3 (2nd test failure)** | ~19,400 tokens cumulative | ~6,200 tokens cumulative | Multi-turn noise prevented |
+| **Turn 4 (Resolved with fix)** | ~28,600 tokens cumulative | ~7,300 tokens cumulative | **~75% context preserved** |
 
 <p align="center">
   <img src="docs/assets/token-compounding-curve.svg" alt="RepoTwin Token Compounding Curve" width="100%" />

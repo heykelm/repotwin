@@ -90,5 +90,46 @@ describe('MCP Compact & Token Efficiency Tools', () => {
 
     await client.close();
   });
+
+  it('compacts real command failure output without losing diagnostic essentials', async () => {
+    const repo = repository();
+    const twins = fs.mkdtempSync(path.join(os.tmpdir(), 'repotwin-mcp-cache-'));
+    directories.push(twins);
+    process.env.REPOTWIN_TWINS_DIR = twins;
+
+    fs.writeFileSync(path.join(repo, 'package.json'), JSON.stringify({
+      name: 'failing-test-pkg',
+      scripts: {
+        test: 'node -e "console.error(\'FAIL test/auth.test.ts\\n  ● Auth > should login\\n    AssertionError: expected 401 to deeply equal 200\\n      at test/auth.test.ts:15:10\\n\'); process.exit(1)"'
+      }
+    }, null, 2));
+    git(repo, ['add', 'package.json']);
+    git(repo, ['commit', '-m', 'add test script']);
+
+    const server = createMcpServer(repo);
+    const client = new Client({ name: 'test-client-failing-compact', version: '1.0.0' });
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    await Promise.all([server.connect(serverTransport), client.connect(clientTransport)]);
+
+    const created = payload(await client.callTool({
+      name: 'repotwin_create_twin',
+      arguments: { repoPath: repo }
+    }));
+
+    const verified = payload(await client.callTool({
+      name: 'repotwin_run_checks',
+      arguments: { candidateId: created.candidateId, commandConsent: created.commandConsent }
+    }));
+
+    expect(verified.canApply).toBe(false);
+    expect(verified.failedCount).toBe(1);
+    expect(verified.failures).toHaveLength(1);
+    expect(verified.failures[0].errorOutput).toContain('test/auth.test.ts:15');
+    expect(verified.failures[0].errorOutput).toContain('expected 401 to deeply equal 200');
+    expect(verified.tokenEfficiency.compactMode).toBe(true);
+    expect(verified.tokenEfficiency.rawErrorCharacters).toBeGreaterThan(0);
+
+    await client.close();
+  });
 });
 

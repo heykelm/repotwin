@@ -34,7 +34,7 @@ export interface TokenEfficiencyAudit {
   instructionFiles: InstructionTokenEntry[];
   contextHogs: ContextHogEntry[];
   commandVerbosity: VerbosityAuditEntry[];
-  estimatedSieveSavingsPercent: number;
+  estimatedSieveSavingsPercent?: number | null;
   recommendations: string[];
 }
 
@@ -215,7 +215,7 @@ export function auditTokenEfficiency(
     totalInstructionTokens <= 1000 ? 'optimal' :
     totalInstructionTokens <= 2500 ? 'moderate' : 'excessive';
 
-  recommendations.push('Run verification through RepoTwin Twin Sieve (repotwin_run_checks) to save ~70-85% of tokens on test/debug iterations.');
+  recommendations.push('Run verification through RepoTwin Twin Sieve (repotwin_run_checks) to filter verbose test output down to surgical failure diagnostics.');
 
   return {
     score,
@@ -225,7 +225,7 @@ export function auditTokenEfficiency(
     instructionFiles: instructionEntries,
     contextHogs,
     commandVerbosity,
-    estimatedSieveSavingsPercent: 74,
+    estimatedSieveSavingsPercent: null,
     recommendations
   };
 }

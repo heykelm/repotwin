@@ -217,7 +217,10 @@ function runAnalyze(repoPathArg?: string, options: AnalyzeOptions = {}) {
       console.log(`    ${chalk.gray('↳')} ${chalk.yellow(hog.path)} (${hog.lines} lines, ~${hog.estimatedTokens} tokens)`);
     }
   }
-  console.log(`  Estimated Twin Sieve Savings: ${chalk.green.bold(`~${tokenEff.estimatedSieveSavingsPercent}%`)} test tokens preserved per turn`);
+  const sieveStatus = typeof tokenEff.estimatedSieveSavingsPercent === 'number'
+    ? `${chalk.green.bold(`~${tokenEff.estimatedSieveSavingsPercent}%`)} test tokens preserved per turn`
+    : `${chalk.dim('Not measured (requires running checks)')}`;
+  console.log(`  Twin Sieve Status           : ${sieveStatus}`);
   console.log('======================================================================');
 
   // HTML Report generation if requested

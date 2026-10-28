@@ -55,29 +55,61 @@ export function extractFailuresFromOutput(output: string, kind: ValidationKind):
   let capturingDiff = false;
   let diffLines: string[] = [];
 
+  function finalizeDiff() {
+    if (capturingDiff && diffLines.length > 0 && currentFailure) {
+      currentFailure.diff = diffLines.join('\n');
+      if (!currentFailure.message) {
+        currentFailure.message = 'Assertion failed (value mismatch)';
+      }
+    }
+    capturingDiff = false;
+    diffLines = [];
+  }
+
+  function pushCurrent() {
+    finalizeDiff();
+    if (currentFailure) {
+      failures.push(currentFailure);
+      currentFailure = null;
+    }
+  }
+
   for (let i = 0; i < lines.length; i++) {
     const rawLine = lines[i];
     const line = rawLine.trim();
 
-    // 1. Jest / Vitest: "FAIL path/to/file.test.ts" or "❯ test/name.test.ts > suite > test name" or "✕ test name"
-    const jestVitestFailMatch = line.match(/(?:FAIL|✕|×|❯)\s+(?:.*?>\s*)?(.*?)(?:\s+\(\d+m?s\))?$/i);
-    const jestAssertionMatch = line.match(/(?:AssertionError|Error):\s+(.*)/i);
-    const expectedMatch = line.match(/Expected:\s+(.*)/i);
-    const receivedMatch = line.match(/Received:\s+(.*)/i);
-    const vitestExpectedDiffMatch = line.match(/(?:expected|diff:)\s+['"]?(.*?)['"]?\s+to (?:deeply equal|equal|match)\s+['"]?(.*?)['"]?$/i);
+    // Skip generic runner package footers (e.g. "FAIL", "FAIL\tpackage/path", "exit status 1")
+    if (/^FAIL(?:\t|\s*$|\s+(?:[a-zA-Z0-9_\-./]+\/(?:pkg|cmd|internal|pkg|v\d+)|github\.com))/.test(line)) {
+      continue;
+    }
+
+    // 1. Go test: "--- FAIL: TestName (0.00s)" and "    file_test.go:42: expected 100, got 200"
+    const goTestFailMatch = line.match(/^---\s+FAIL:\s+([^\s]+)/);
+    const goAssertMatch = rawLine.match(/^\s*([a-zA-Z0-9_\-./\\]+\.go):(\d+):\s+(.*)$/);
+
+    if (goTestFailMatch) {
+      pushCurrent();
+      currentFailure = {
+        testName: goTestFailMatch[1],
+        stackSnippet: []
+      };
+      continue;
+    }
+
+    if (goAssertMatch) {
+      if (!currentFailure) {
+        currentFailure = { stackSnippet: [] };
+      }
+      currentFailure.file = goAssertMatch[1];
+      currentFailure.line = parseInt(goAssertMatch[2], 10);
+      currentFailure.message = goAssertMatch[3].trim();
+      continue;
+    }
 
     // 2. Pytest: "FAILED test_file.py::test_function - AssertionError: ..."
     const pytestMatch = line.match(/FAILED\s+([^:]+)::([^\s]+)(?:\s+-\s+(.*))?/);
-
-    // 3. Cargo test: "test tests::test_name ... FAILED" or "assertion failed: `(left == right)`"
-    const cargoFailMatch = line.match(/test\s+([^\s]+)\s+\.\.\.\s+FAILED/);
-    const cargoAssertMatch = line.match(/assertion `(.*?)` failed/);
-
-    // 4. File:line match (e.g. at /path/to/test.ts:42:15 or test_file.py:12)
-    const fileLineMatch = line.match(/(?:at\s+(?:.*?\()?)?([a-zA-Z0-9_\-./\\]+\.(?:ts|js|jsx|tsx|py|rs|go|dart)):(\d+)(?::\d+)?\)?/);
-
     if (pytestMatch) {
-      if (currentFailure) failures.push(currentFailure);
+      pushCurrent();
       currentFailure = {
         file: pytestMatch[1],
         testName: pytestMatch[2],
@@ -87,8 +119,11 @@ export function extractFailuresFromOutput(output: string, kind: ValidationKind):
       continue;
     }
 
+    // 3. Cargo test: "test tests::test_name ... FAILED" or "assertion failed: `(left == right)`"
+    const cargoFailMatch = line.match(/test\s+([^\s]+)\s+\.\.\.\s+FAILED/);
+    const cargoAssertMatch = line.match(/assertion `(.*?)` failed/);
     if (cargoFailMatch) {
-      if (currentFailure) failures.push(currentFailure);
+      pushCurrent();
       currentFailure = {
         testName: cargoFailMatch[1],
         message: 'Cargo test failed',
@@ -97,19 +132,36 @@ export function extractFailuresFromOutput(output: string, kind: ValidationKind):
       continue;
     }
 
-    if (jestVitestFailMatch && !line.includes('Test Files') && !line.includes('Tests')) {
-      const candidateName = jestVitestFailMatch[1].trim();
-      if (candidateName && candidateName.length > 2) {
-        if (currentFailure) failures.push(currentFailure);
-        currentFailure = {
-          testName: candidateName,
-          stackSnippet: []
-        };
-        capturingDiff = false;
-        diffLines = [];
+    // 4. Jest failing file header: "FAIL path/to/file.test.ts"
+    const jestFileFailMatch = line.match(/^FAIL\s+([a-zA-Z0-9_\-./\\]+\.(?:ts|js|jsx|tsx))\b/);
+    if (jestFileFailMatch) {
+      if (!currentFailure) {
+        currentFailure = { file: jestFileFailMatch[1], stackSnippet: [] };
+      } else if (!currentFailure.file) {
+        currentFailure.file = jestFileFailMatch[1];
+      }
+      continue;
+    }
+
+    // 5. Jest / Vitest individual test failure: "● Suite > test name" or "✕ test name" or "❯ test name"
+    const isReportFooter = line.includes('Test Files') || line.includes('Tests:') || line.includes('Duration:');
+    const jestIndividualFailMatch = line.match(/(?:✕|×|❯|●)\s+(?:.*?>\s*)?(.*?)(?:\s+\(\d+m?s\))?$/i);
+    if (jestIndividualFailMatch && !isReportFooter) {
+      const candidateName = jestIndividualFailMatch[1].trim();
+      if (candidateName && candidateName.length > 2 && !candidateName.startsWith('http')) {
+        if (currentFailure && !currentFailure.testName) {
+          currentFailure.testName = candidateName;
+        } else {
+          pushCurrent();
+          currentFailure = {
+            testName: candidateName,
+            stackSnippet: []
+          };
+        }
       }
     }
 
+    const jestAssertionMatch = line.match(/(?:AssertionError|Error):\s+(.*)/i);
     if (jestAssertionMatch) {
       if (!currentFailure) currentFailure = { stackSnippet: [] };
       currentFailure.message = jestAssertionMatch[1];
@@ -118,29 +170,47 @@ export function extractFailuresFromOutput(output: string, kind: ValidationKind):
       currentFailure.message = cargoAssertMatch[0];
     }
 
+    // 5. Multiline diff detection (Jest, Vitest, diffs)
+    const vitestExpectedDiffMatch = line.match(/(?:expected|diff:)\s+['"]?(.*?)['"]?\s+to (?:deeply equal|equal|match)\s+['"]?(.*?)['"]?$/i);
+    const diffStartMatch = line.match(/^(?:[-+]\s*(?:Expected|Received)|(?:Expected|Received):)/i);
+
     if (vitestExpectedDiffMatch) {
       if (!currentFailure) currentFailure = { stackSnippet: [] };
       currentFailure.expected = vitestExpectedDiffMatch[2];
       currentFailure.received = vitestExpectedDiffMatch[1];
       currentFailure.diff = `- expected: ${vitestExpectedDiffMatch[2]}\n+ received: ${vitestExpectedDiffMatch[1]}`;
-    } else if (expectedMatch) {
+    } else if (diffStartMatch) {
       if (!currentFailure) currentFailure = { stackSnippet: [] };
-      currentFailure.expected = expectedMatch[1];
       capturingDiff = true;
-    } else if (receivedMatch) {
-      if (!currentFailure) currentFailure = { stackSnippet: [] };
-      currentFailure.received = receivedMatch[1];
-      if (currentFailure.expected) {
-        currentFailure.diff = `- expected: ${currentFailure.expected}\n+ received: ${receivedMatch[1]}`;
+      diffLines.push(rawLine.trimEnd());
+    } else if (capturingDiff) {
+      // While capturing diff, accumulate diff lines (+, -, spaces, object properties)
+      const isDiffContinuation = /^[ \t]*[-+]/m.test(rawLine) ||
+        /^[ \t]+(?:Object|Array|\{|\}|"[^"]+":)/.test(rawLine) ||
+        line.startsWith('-') || line.startsWith('+');
+
+      if (isDiffContinuation) {
+        diffLines.push(rawLine.trimEnd());
+      } else if (line.startsWith('at ') || line.startsWith('FAIL') || isReportFooter) {
+        finalizeDiff();
+      } else if (line.length === 0 && diffLines.length > 0) {
+        diffLines.push('');
+      } else if (diffLines.length > 0) {
+        finalizeDiff();
       }
     }
 
-    if (fileLineMatch && currentFailure && !currentFailure.file) {
+    // 6. File & Line matching
+    const fileLineMatch = line.match(/(?:at\s+(?:.*?\()?)?([a-zA-Z0-9_\-./\\]+\.(?:ts|js|jsx|tsx|py|rs|go|dart)):(\d+)(?::\d+)?\)?/);
+    if (fileLineMatch && currentFailure) {
       const matchPath = fileLineMatch[1];
-      // Only keep user project files, ignore node_modules
       if (!matchPath.includes('node_modules') && !matchPath.includes('.cargo') && !matchPath.includes('site-packages')) {
-        currentFailure.file = matchPath;
-        currentFailure.line = parseInt(fileLineMatch[2], 10);
+        if (!currentFailure.file) {
+          currentFailure.file = matchPath;
+        }
+        if (!currentFailure.line) {
+          currentFailure.line = parseInt(fileLineMatch[2], 10);
+        }
       }
     }
 
@@ -152,11 +222,9 @@ export function extractFailuresFromOutput(output: string, kind: ValidationKind):
     }
   }
 
-  if (currentFailure) {
-    failures.push(currentFailure);
-  }
+  pushCurrent();
 
-  // If no structured failure was extracted but output contains error keywords, extract top error lines
+  // Fallback: If no structured failure was extracted but output contains error keywords, extract top error lines
   if (failures.length === 0 && clean.length > 0) {
     const errorLines = lines
       .map(l => l.trim())
@@ -242,10 +310,16 @@ export function sieveCommandOutput(
     }
   }
 
-  // Fallback if no specific failure attributes were extracted
-  if (failures.length === 0) {
-    const fallbackLines = clean.split('\n').filter(l => l.trim().length > 0).slice(-8);
-    outputLines.push(`Diagnostic output:\n${fallbackLines.join('\n')}`);
+  // Anti-blindness fallback: if no failure or if extracted failure lacks actionable details (message, diff, location)
+  const hasActionableDetail = failures.some(f => Boolean(f.message || f.diff || (f.file && f.line)));
+  if (failures.length === 0 || !hasActionableDetail) {
+    const fallbackLines = clean.split('\n')
+      .map(l => l.trimEnd())
+      .filter(l => l.trim().length > 0 && !l.includes('node_modules') && !l.includes('node:internal'))
+      .slice(-15);
+    if (fallbackLines.length > 0) {
+      outputLines.push(`Diagnostic output:\n  ${fallbackLines.join('\n  ')}`);
+    }
   }
 
   const compactOutput = outputLines.join('\n');

@@ -170,7 +170,7 @@ export function generateHtmlReport(options: HtmlReportOptions, outputPath: strin
       <div class="metrics" style="margin: 16px 0;">
         <article class="metric"><span>${t('Empreinte consignes (prompts)', 'Instruction weight (per prompt)')}</span><strong>~${n(tokenEfficiency.totalInstructionTokens)}</strong><p>${t('tokens injectés par requête', 'tokens injected per turn')}</p></article>
         <article class="metric"><span>${t('Fichiers volumineux (>500 l)', 'Large source files (>500 lines)')}</span><strong>${tokenEfficiency.contextHogs.length}</strong><p>${t('fichiers à risque de re-lecture', 'files at risk of full re-reads')}</p></article>
-        <article class="metric"><span>${t('Économie Twin Sieve', 'Twin Sieve savings')}</span><strong>~${tokenEfficiency.estimatedSieveSavingsPercent}%</strong><p>${t('des tokens de test préservés', 'test tokens preserved per turn')}</p></article>
+        <article class="metric"><span>${t('Économie Twin Sieve', 'Twin Sieve savings')}</span><strong>${typeof tokenEfficiency.estimatedSieveSavingsPercent === 'number' ? `~${tokenEfficiency.estimatedSieveSavingsPercent}%` : '—'}</strong><p>${typeof tokenEfficiency.estimatedSieveSavingsPercent === 'number' ? t('des tokens de test préservés', 'test tokens preserved per turn') : t('mesuré lors de l’exécution des tests', 'measured upon test execution')}</p></article>
       </div>
       <div style="margin: 20px 0;">
         ${renderCompoundingTokenCurve(locale)}
