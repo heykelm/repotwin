@@ -1,11 +1,11 @@
 {
   "benchmark": "RepoTwin full MCP response, local provider-free",
-  "generatedAt": "2026-10-28T22:57:43.228Z",
+  "generatedAt": "2026-10-29T22:59:07.400Z",
   "node": "v25.0.0",
-  "sourceRevision": "5f88337",
+  "sourceRevision": "0df5c44",
   "sourceSha256": {
-    "src/mcp/server.ts": "ce38f4b2f6c688c18b3d84532ea2bdd9e51faaff2169ffcf7db513347fd10a8b",
-    "src/verification/compact-sieve.ts": "704ece2caf14a6aa60dbcec1ae755977cfaacc663175ce639967c796fc6df7ca"
+    "src/mcp/server.ts": "7e3178a1ee19a2fb1e147f789cf9647efe8cb677a69663530cf8132d4f824d47",
+    "src/verification/compact-sieve.ts": "f666f79d2033afb8b23338bcb0dfcb852cd624dab286946425cf746acc3b0cba"
   },
   "tokenizer": "No provider tokenizer used; estimatedTokens4Chars is ceil(JavaScript UTF-16 characters/4), not billed tokens.",
   "sameRunMethod": "Matched raw payload derived from the actual compact MCP response by applying the current server noncompact field mapping; independent noncompact MCP call validates the real shape but runs the command again.",
@@ -41,8 +41,8 @@
         "compactRawOutputSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
         "rawModeOutputSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
         "durationMs": {
-          "compact": 220,
-          "raw": 172
+          "compact": 180,
+          "raw": 180
         }
       },
       "matchedSameRun": {
@@ -71,7 +71,7 @@
           "sentinel": "authorization rejects wrong status",
           "inCompactFullResponse": true,
           "inRawFullResponse": true,
-          "inCompactSummary": false
+          "inCompactSummary": true
         },
         {
           "sentinel": "401",
@@ -88,49 +88,49 @@
       ],
       "diagnosticsAfterCaptureLimit": [],
       "capturedRawOutput": {
-        "characters": 985,
-        "utf8Bytes": 1007
+        "characters": 983,
+        "utf8Bytes": 1005
       },
       "compactSummaryOutput": {
-        "characters": 113,
-        "utf8Bytes": 115,
-        "estimatedTokens4Chars": 29
+        "characters": 769,
+        "utf8Bytes": 771,
+        "estimatedTokens4Chars": 193
       },
-      "extractedFailureCount": 1,
+      "extractedFailureCount": 3,
       "observed": {
         "compactFullResponse": {
-          "characters": 2084,
-          "utf8Bytes": 2108,
-          "estimatedTokens4Chars": 521
+          "characters": 3702,
+          "utf8Bytes": 3726,
+          "estimatedTokens4Chars": 926
         },
         "rawFullResponse": {
-          "characters": 1761,
-          "utf8Bytes": 1783,
-          "estimatedTokens4Chars": 441
+          "characters": 1788,
+          "utf8Bytes": 1810,
+          "estimatedTokens4Chars": 447
         },
-        "deltaBytes": 325,
-        "deltaEstimatedTokens": 80,
+        "deltaBytes": 1916,
+        "deltaEstimatedTokens": 479,
         "sameCapturedCommandOutput": false,
-        "compactRawOutputSha256": "a9479f7ad4f6d6b36858baa91d3d60e7b21d997f1ce1f832fc2be13658fc94e3",
-        "rawModeOutputSha256": "57b78bfc16b4746dc65abceb2ea505580c57b38303d437cbe3d4ffa4bcbd579a",
+        "compactRawOutputSha256": "4711a31a54bf20d10a782e00581b548df570c9e7aa0d74bd5c1ff1304d9fb18b",
+        "rawModeOutputSha256": "2795ca7df526875c20f70b7db34852ab4c57f60b83c9ad406c89a071d059beaa",
         "durationMs": {
-          "compact": 170,
-          "raw": 177
+          "compact": 172,
+          "raw": 179
         }
       },
       "matchedSameRun": {
         "compactFullResponse": {
-          "characters": 2084,
-          "utf8Bytes": 2108,
-          "estimatedTokens4Chars": 521
+          "characters": 3702,
+          "utf8Bytes": 3726,
+          "estimatedTokens4Chars": 926
         },
         "rawFullResponse": {
-          "characters": 1761,
-          "utf8Bytes": 1783,
-          "estimatedTokens4Chars": 441
+          "characters": 1786,
+          "utf8Bytes": 1808,
+          "estimatedTokens4Chars": 447
         },
-        "deltaBytes": 325,
-        "deltaEstimatedTokens": 80
+        "deltaBytes": 1918,
+        "deltaEstimatedTokens": 479
       }
     },
     {
@@ -144,7 +144,7 @@
           "sentinel": "profile object is complete",
           "inCompactFullResponse": true,
           "inRawFullResponse": true,
-          "inCompactSummary": false
+          "inCompactSummary": true
         },
         {
           "sentinel": "viewer",
@@ -167,49 +167,49 @@
       ],
       "diagnosticsAfterCaptureLimit": [],
       "capturedRawOutput": {
-        "characters": 1261,
-        "utf8Bytes": 1283
+        "characters": 1259,
+        "utf8Bytes": 1281
       },
       "compactSummaryOutput": {
-        "characters": 168,
-        "utf8Bytes": 170,
-        "estimatedTokens4Chars": 42
+        "characters": 819,
+        "utf8Bytes": 821,
+        "estimatedTokens4Chars": 205
       },
-      "extractedFailureCount": 1,
+      "extractedFailureCount": 3,
       "observed": {
         "compactFullResponse": {
-          "characters": 2480,
-          "utf8Bytes": 2504,
-          "estimatedTokens4Chars": 620
+          "characters": 4030,
+          "utf8Bytes": 4054,
+          "estimatedTokens4Chars": 1008
         },
         "rawFullResponse": {
-          "characters": 2047,
-          "utf8Bytes": 2069,
-          "estimatedTokens4Chars": 512
+          "characters": 2068,
+          "utf8Bytes": 2090,
+          "estimatedTokens4Chars": 517
         },
-        "deltaBytes": 435,
-        "deltaEstimatedTokens": 108,
+        "deltaBytes": 1964,
+        "deltaEstimatedTokens": 491,
         "sameCapturedCommandOutput": false,
-        "compactRawOutputSha256": "cd80ef7a85d91b604287b7362004287e4a9f6f17f50c75b436caeb9aba601b7f",
-        "rawModeOutputSha256": "4c65f628a3d56ce36893a0b3ce0009a2553499f77c233c1897c224a88a33a6d1",
+        "compactRawOutputSha256": "93a20bcca3aae2f9c5bf15ed917fd2d4e8adfe8cb775bb9c9031b539d3092c30",
+        "rawModeOutputSha256": "221c0d2803d2c4ba325b08c5ac5aa7d39be5dcaa14d3ae6949bcb0bf69e594c9",
         "durationMs": {
-          "compact": 176,
-          "raw": 171
+          "compact": 187,
+          "raw": 168
         }
       },
       "matchedSameRun": {
         "compactFullResponse": {
-          "characters": 2480,
-          "utf8Bytes": 2504,
-          "estimatedTokens4Chars": 620
+          "characters": 4030,
+          "utf8Bytes": 4054,
+          "estimatedTokens4Chars": 1008
         },
         "rawFullResponse": {
-          "characters": 2047,
-          "utf8Bytes": 2069,
-          "estimatedTokens4Chars": 512
+          "characters": 2072,
+          "utf8Bytes": 2094,
+          "estimatedTokens4Chars": 518
         },
-        "deltaBytes": 435,
-        "deltaEstimatedTokens": 108
+        "deltaBytes": 1960,
+        "deltaEstimatedTokens": 490
       }
     },
     {
@@ -223,19 +223,19 @@
           "sentinel": "first sentinel",
           "inCompactFullResponse": true,
           "inRawFullResponse": true,
-          "inCompactSummary": false
+          "inCompactSummary": true
         },
         {
           "sentinel": "second sentinel",
           "inCompactFullResponse": true,
           "inRawFullResponse": true,
-          "inCompactSummary": false
+          "inCompactSummary": true
         },
         {
           "sentinel": "third sentinel",
           "inCompactFullResponse": true,
           "inRawFullResponse": true,
-          "inCompactSummary": false
+          "inCompactSummary": true
         },
         {
           "sentinel": "ALPHA_ACTUAL",
@@ -258,49 +258,49 @@
       ],
       "diagnosticsAfterCaptureLimit": [],
       "capturedRawOutput": {
-        "characters": 3047,
-        "utf8Bytes": 3077
+        "characters": 3041,
+        "utf8Bytes": 3071
       },
       "compactSummaryOutput": {
-        "characters": 623,
-        "utf8Bytes": 625,
-        "estimatedTokens4Chars": 156
+        "characters": 2049,
+        "utf8Bytes": 2051,
+        "estimatedTokens4Chars": 513
       },
-      "extractedFailureCount": 1,
+      "extractedFailureCount": 7,
       "observed": {
         "compactFullResponse": {
-          "characters": 5285,
-          "utf8Bytes": 5317,
-          "estimatedTokens4Chars": 1322
+          "characters": 8765,
+          "utf8Bytes": 8797,
+          "estimatedTokens4Chars": 2192
         },
         "rawFullResponse": {
-          "characters": 3876,
-          "utf8Bytes": 3906,
-          "estimatedTokens4Chars": 969
+          "characters": 3907,
+          "utf8Bytes": 3937,
+          "estimatedTokens4Chars": 977
         },
-        "deltaBytes": 1411,
-        "deltaEstimatedTokens": 353,
+        "deltaBytes": 4860,
+        "deltaEstimatedTokens": 1215,
         "sameCapturedCommandOutput": false,
-        "compactRawOutputSha256": "291934fe263be4fc2d00bb1fa9e62bc2995f8ab44d44e17b1d38a8b10caae03b",
-        "rawModeOutputSha256": "00299f38a7c4d33ab315503c28e3669cfbf41cff4ae528de2b2d88437b7cfd63",
+        "compactRawOutputSha256": "4c6016d7c3958380ebf4df37cfd7f0c4eb7d5fbcf7d191cb98178e879e86e957",
+        "rawModeOutputSha256": "8c7918cd1db48467056795fb9ec2d6079e8c8de432a425b0da66593dae657099",
         "durationMs": {
-          "compact": 181,
-          "raw": 174
+          "compact": 179,
+          "raw": 238
         }
       },
       "matchedSameRun": {
         "compactFullResponse": {
-          "characters": 5285,
-          "utf8Bytes": 5317,
-          "estimatedTokens4Chars": 1322
+          "characters": 8765,
+          "utf8Bytes": 8797,
+          "estimatedTokens4Chars": 2192
         },
         "rawFullResponse": {
-          "characters": 3882,
-          "utf8Bytes": 3912,
-          "estimatedTokens4Chars": 971
+          "characters": 3903,
+          "utf8Bytes": 3933,
+          "estimatedTokens4Chars": 976
         },
-        "deltaBytes": 1405,
-        "deltaEstimatedTokens": 351
+        "deltaBytes": 4864,
+        "deltaEstimatedTokens": 1216
       }
     },
     {
@@ -349,14 +349,14 @@
       "extractedFailureCount": 0,
       "observed": {
         "compactFullResponse": {
-          "characters": 68479,
-          "utf8Bytes": 68481,
-          "estimatedTokens4Chars": 17120
+          "characters": 68507,
+          "utf8Bytes": 68509,
+          "estimatedTokens4Chars": 17127
         },
         "rawFullResponse": {
-          "characters": 66993,
-          "utf8Bytes": 66993,
-          "estimatedTokens4Chars": 16749
+          "characters": 67021,
+          "utf8Bytes": 67021,
+          "estimatedTokens4Chars": 16756
         },
         "deltaBytes": 1488,
         "deltaEstimatedTokens": 371,
@@ -364,20 +364,20 @@
         "compactRawOutputSha256": "2b1fe3a8c86a7fe505ee7b04accdd95a17d48ab96c40104c3f15689fc4a2ded1",
         "rawModeOutputSha256": "2b1fe3a8c86a7fe505ee7b04accdd95a17d48ab96c40104c3f15689fc4a2ded1",
         "durationMs": {
-          "compact": 173,
-          "raw": 176
+          "compact": 184,
+          "raw": 182
         }
       },
       "matchedSameRun": {
         "compactFullResponse": {
-          "characters": 68479,
-          "utf8Bytes": 68481,
-          "estimatedTokens4Chars": 17120
+          "characters": 68507,
+          "utf8Bytes": 68509,
+          "estimatedTokens4Chars": 17127
         },
         "rawFullResponse": {
-          "characters": 66993,
-          "utf8Bytes": 66993,
-          "estimatedTokens4Chars": 16749
+          "characters": 67021,
+          "utf8Bytes": 67021,
+          "estimatedTokens4Chars": 16756
         },
         "deltaBytes": 1488,
         "deltaEstimatedTokens": 371
@@ -416,14 +416,14 @@
       "extractedFailureCount": 1,
       "observed": {
         "compactFullResponse": {
-          "characters": 2025,
-          "utf8Bytes": 2027,
-          "estimatedTokens4Chars": 507
+          "characters": 2051,
+          "utf8Bytes": 2053,
+          "estimatedTokens4Chars": 513
         },
         "rawFullResponse": {
-          "characters": 1054,
-          "utf8Bytes": 1054,
-          "estimatedTokens4Chars": 264
+          "characters": 1080,
+          "utf8Bytes": 1080,
+          "estimatedTokens4Chars": 270
         },
         "deltaBytes": 973,
         "deltaEstimatedTokens": 243,
@@ -431,20 +431,20 @@
         "compactRawOutputSha256": "48581040a48cb832b1bb56180b947e5024fed3a29217fd3730716f280ecb1e69",
         "rawModeOutputSha256": "48581040a48cb832b1bb56180b947e5024fed3a29217fd3730716f280ecb1e69",
         "durationMs": {
-          "compact": 284,
-          "raw": 279
+          "compact": 288,
+          "raw": 295
         }
       },
       "matchedSameRun": {
         "compactFullResponse": {
-          "characters": 2025,
-          "utf8Bytes": 2027,
-          "estimatedTokens4Chars": 507
+          "characters": 2051,
+          "utf8Bytes": 2053,
+          "estimatedTokens4Chars": 513
         },
         "rawFullResponse": {
-          "characters": 1054,
-          "utf8Bytes": 1054,
-          "estimatedTokens4Chars": 264
+          "characters": 1080,
+          "utf8Bytes": 1080,
+          "estimatedTokens4Chars": 270
         },
         "deltaBytes": 973,
         "deltaEstimatedTokens": 243

@@ -20,15 +20,34 @@
       "status": "failed",
       "command": "npm run test",
       "exitCode": 1,
-      "durationMs": 170,
-      "errorOutput": "❌ FAILED: 1 failure detected in test execution.\nError: Assertion failed (value mismatch)\nDiff:\n    expected: 200,",
-      "rawOutput": "> bench-assertion@1.0.0 test\n> node --test suite.test.cjs\n\n✖ authorization rejects wrong status (0.620208ms)\nℹ tests 1\nℹ suites 0\nℹ pass 0\nℹ fail 1\nℹ cancelled 0\nℹ skipped 0\nℹ todo 0\nℹ duration_ms 40.988792\n\n✖ failing tests:\n\ntest at suite.test.cjs:3:1\n✖ authorization rejects wrong status (0.620208ms)\n  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n  \n  401 !== 200\n  \n      at TestContext.<anonymous> (/private/var/folders/wm/4dvh2_2j4153d_m4m9bgqtd88g4vlc/T/repotwin-context-bench-NgLsiR/twins/assertion-candidate-1793228256519-4da4b82e/suite.test.cjs:3:57)\n      at Test.runInAsyncScope (node:async_hooks:213:14)\n      at Test.run (node:internal/test_runner/test:1106:25)\n      at Test.start (node:internal/test_runner/test:1003:17)\n      at startSubtestAfterBootstrap (node:internal/test_runner/harness:358:17) {\n    generatedMessage: true,\n    code: 'ERR_ASSERTION',\n    actual: 401,\n    expected: 200,\n    operator: 'strictEqual',\n    diff: 'simple'\n  }",
+      "durationMs": 172,
+      "errorOutput": "❌ FAILED: 3 failures detected in test execution.\n[Failure 1] Test: authorization rejects wrong status (0.60875ms)\n[Failure 2] Test: failing tests:\nLocation: suite.test.cjs:3\n[Failure 3] Test: authorization rejects wrong status (0.60875ms)\nLocation: /private/var/folders/wm/4dvh2_2j4153d_m4m9bgqtd88g4vlc/T/repotwin-context-bench-uw5vZr/twins/assertion-candidate-1793314740232-3c4b24db/suite.test.cjs:3\nError: Expected values to be strictly equal:\nDiff:\n    expected: 200,\n    operator: 'strictEqual',\n    diff: 'simple'\n  }\nStack:\n  at TestContext.<anonymous> (/private/var/folders/wm/4dvh2_2j4153d_m4m9bgqtd88g4vlc/T/repotwin-context-bench-uw5vZr/twins/assertion-candidate-1793314740232-3c4b24db/suite.test.cjs:3:57)\n  at Test.runInAsyncScope (node:async_hooks:213:14)",
+      "rawOutput": "> bench-assertion@1.0.0 test\n> node --test suite.test.cjs\n\n✖ authorization rejects wrong status (0.60875ms)\nℹ tests 1\nℹ suites 0\nℹ pass 0\nℹ fail 1\nℹ cancelled 0\nℹ skipped 0\nℹ todo 0\nℹ duration_ms 43.380875\n\n✖ failing tests:\n\ntest at suite.test.cjs:3:1\n✖ authorization rejects wrong status (0.60875ms)\n  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n  \n  401 !== 200\n  \n      at TestContext.<anonymous> (/private/var/folders/wm/4dvh2_2j4153d_m4m9bgqtd88g4vlc/T/repotwin-context-bench-uw5vZr/twins/assertion-candidate-1793314740232-3c4b24db/suite.test.cjs:3:57)\n      at Test.runInAsyncScope (node:async_hooks:213:14)\n      at Test.run (node:internal/test_runner/test:1106:25)\n      at Test.start (node:internal/test_runner/test:1003:17)\n      at startSubtestAfterBootstrap (node:internal/test_runner/harness:358:17) {\n    generatedMessage: true,\n    code: 'ERR_ASSERTION',\n    actual: 401,\n    expected: 200,\n    operator: 'strictEqual',\n    diff: 'simple'\n  }",
       "outputTruncated": false,
+      "totalLogLines": 33,
       "extractedFailures": [
         {
+          "testName": "authorization rejects wrong status (0.60875ms)",
+          "stackSnippet": []
+        },
+        {
+          "testName": "failing tests:",
           "stackSnippet": [],
-          "diff": "    expected: 200,",
-          "message": "Assertion failed (value mismatch)"
+          "file": "suite.test.cjs",
+          "line": 3
+        },
+        {
+          "testName": "authorization rejects wrong status (0.60875ms)",
+          "stackSnippet": [
+            "at TestContext.<anonymous> (/private/var/folders/wm/4dvh2_2j4153d_m4m9bgqtd88g4vlc/T/repotwin-context-bench-uw5vZr/twins/assertion-candidate-1793314740232-3c4b24db/suite.test.cjs:3:57)",
+            "at Test.runInAsyncScope (node:async_hooks:213:14)"
+          ],
+          "message": "Expected values to be strictly equal:",
+          "diff": "    expected: 200,\n    operator: 'strictEqual',\n    diff: 'simple'\n  }",
+          "expected": "200",
+          "received": "401",
+          "file": "/private/var/folders/wm/4dvh2_2j4153d_m4m9bgqtd88g4vlc/T/repotwin-context-bench-uw5vZr/twins/assertion-candidate-1793314740232-3c4b24db/suite.test.cjs",
+          "line": 3
         }
       ]
     }

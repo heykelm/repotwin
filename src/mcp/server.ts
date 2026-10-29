@@ -154,9 +154,45 @@ export function createMcpServer(defaultRepoPath: string = process.cwd()): Server
               compactOutput: {
                 type: 'boolean',
                 description: 'If true (default), strips terminal noise, warnings and long stack traces to return minimal, high-precision diagnostics and preserve agent context tokens.'
+              },
+              lazyLogs: {
+                type: 'boolean',
+                description: 'If true, returns surgical failure summary and logId without embedding the full raw terminal dump in the JSON response. Full logs can be fetched on demand via repotwin_get_log.'
               }
             },
             required: ['candidateId', 'commandConsent'],
+            additionalProperties: false
+          }
+        },
+        {
+          name: 'repotwin_get_log',
+          description: 'Retrieve full or paginated raw command output for an executed check in a candidate twin on demand, preventing large log dumps from saturating the agent conversation history.',
+          annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+          inputSchema: {
+            type: 'object',
+            properties: {
+              candidateId: {
+                type: 'string',
+                description: 'Candidate identifier returned by repotwin_create_twin or repotwin_prepare_fix.'
+              },
+              commandId: {
+                type: 'string',
+                description: 'Command or check identifier (e.g. from failures or passedCommands).'
+              },
+              tail: {
+                type: 'number',
+                description: 'Number of lines from the end to retrieve (e.g. 50).'
+              },
+              offset: {
+                type: 'number',
+                description: 'Starting line index (0-based).'
+              },
+              limit: {
+                type: 'number',
+                description: 'Maximum number of lines to return.'
+              }
+            },
+            required: ['candidateId', 'commandId'],
             additionalProperties: false
           }
         },
@@ -413,6 +449,7 @@ export function createMcpServer(defaultRepoPath: string = process.cwd()): Server
           const passed = candidate.commandResults.filter(result => result.status === 'passed');
 
           const isCompact = args.compactOutput !== false;
+          const isLazy = args.lazyLogs === true;
           const failures = failed.map(f => {
             const sieve = isCompact ? sieveCommandOutput(f.output, f.kind, f.status) : undefined;
             return {
@@ -427,8 +464,10 @@ export function createMcpServer(defaultRepoPath: string = process.cwd()): Server
               // The parser is best-effort. Keep the captured diagnostic so an
               // unrecognized or partial extraction cannot hide an error.
               errorOutput: sieve ? sieve.compactOutput : f.output,
-              rawOutput: isCompact ? f.output : undefined,
+              rawOutput: isCompact ? (isLazy ? undefined : f.output) : undefined,
               outputTruncated: f.outputTruncated,
+              logAvailableOnDemand: isLazy ? true : undefined,
+              totalLogLines: f.output.split('\n').length,
               extractedFailures: sieve && sieve.failures.length > 0 ? sieve.failures : undefined
             };
           });
@@ -708,6 +747,46 @@ export function createMcpServer(defaultRepoPath: string = process.cwd()): Server
               {
                 type: 'text',
                 text: JSON.stringify(audit, null, 2)
+              }
+            ]
+          };
+        }
+
+        case 'repotwin_get_log': {
+          const candidate = getCandidate(args);
+          const commandId = requiredString(args, 'commandId');
+          const result = candidate.commandResults.find(r => r.id === commandId);
+          if (!result) {
+            throw new McpError(ErrorCode.InvalidParams, `Command '${commandId}' not found in candidate execution results.`);
+          }
+
+          const allLines = result.output.split('\n');
+          let slice = allLines;
+          if (typeof args.offset === 'number' && args.offset >= 0) {
+            slice = slice.slice(args.offset);
+          }
+          if (typeof args.limit === 'number' && args.limit > 0) {
+            slice = slice.slice(0, args.limit);
+          } else if (typeof args.tail === 'number' && args.tail > 0) {
+            slice = slice.slice(-args.tail);
+          }
+
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify({
+                  commandId: result.id,
+                  command: result.display,
+                  kind: result.kind,
+                  status: result.status,
+                  exitCode: result.exitCode,
+                  durationMs: result.durationMs,
+                  totalLines: allLines.length,
+                  linesReturned: slice.length,
+                  outputTruncated: result.outputTruncated,
+                  log: slice.join('\n')
+                }, null, 2)
               }
             ]
           };

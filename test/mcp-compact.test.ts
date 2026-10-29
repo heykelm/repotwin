@@ -134,5 +134,62 @@ describe('MCP Compact & Token Efficiency Tools', () => {
 
     await client.close();
   });
+
+  it('supports two-tier lazy logs with repotwin_get_log on demand', async () => {
+    const repo = repository();
+    const twins = fs.mkdtempSync(path.join(os.tmpdir(), 'repotwin-mcp-cache-'));
+    directories.push(twins);
+    process.env.REPOTWIN_TWINS_DIR = twins;
+
+    fs.writeFileSync(path.join(repo, 'package.json'), JSON.stringify({
+      name: 'lazy-log-pkg',
+      scripts: {
+        test: 'node -e "for(let i=0;i<50;i++) console.log(\'Line \' + i); console.error(\'FAIL test/auth.test.ts\\n  ● Auth > fail\\n    AssertionError: expected 500 to equal 200\\n      at test/auth.test.ts:20:5\\n\'); process.exit(1)"'
+      }
+    }, null, 2));
+    git(repo, ['add', 'package.json']);
+    git(repo, ['commit', '-m', 'add test script']);
+
+    const server = createMcpServer(repo);
+    const client = new Client({ name: 'test-client-lazy-logs', version: '1.0.0' });
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    await Promise.all([server.connect(serverTransport), client.connect(clientTransport)]);
+
+    const created = payload(await client.callTool({
+      name: 'repotwin_create_twin',
+      arguments: { repoPath: repo }
+    }));
+
+    const verified = payload(await client.callTool({
+      name: 'repotwin_run_checks',
+      arguments: {
+        candidateId: created.candidateId,
+        commandConsent: created.commandConsent,
+        compactOutput: true,
+        lazyLogs: true
+      }
+    }));
+
+    expect(verified.canApply).toBe(false);
+    expect(verified.failures[0].errorOutput).toContain('test/auth.test.ts:20');
+    expect(verified.failures[0].rawOutput).toBeUndefined();
+    expect(verified.failures[0].logAvailableOnDemand).toBe(true);
+    expect(verified.failures[0].totalLogLines).toBeGreaterThan(40);
+
+    const logFetched = payload(await client.callTool({
+      name: 'repotwin_get_log',
+      arguments: {
+        candidateId: created.candidateId,
+        commandId: verified.failures[0].id,
+        tail: 10
+      }
+    }));
+
+    expect(logFetched.commandId).toBe(verified.failures[0].id);
+    expect(logFetched.linesReturned).toBeLessThanOrEqual(10);
+    expect(logFetched.log).toContain('test/auth.test.ts');
+
+    await client.close();
+  });
 });
 

@@ -137,6 +137,20 @@ export function extractFailuresFromOutput(output: string, kind: ValidationKind):
       continue;
     }
 
+    // 3b. TypeScript compiler: "file.ts:1:7 - error TS2322: Type 'x' is not assignable to type 'y'."
+    const tsErrorMatch = line.match(/^([a-zA-Z0-9_\-./\\]+\.(?:ts|tsx|js|jsx)):(\d+):(\d+)\s+-\s+(?:error|warning)\s+(TS\d+):\s+(.*)$/);
+    if (tsErrorMatch) {
+      pushCurrent();
+      currentFailure = {
+        file: tsErrorMatch[1],
+        line: parseInt(tsErrorMatch[2], 10),
+        testName: `TS ${tsErrorMatch[4]}`,
+        message: tsErrorMatch[5].trim(),
+        stackSnippet: []
+      };
+      continue;
+    }
+
     // 4. Jest failing file header: "FAIL path/to/file.test.ts"
     const jestFileFailMatch = line.match(/^FAIL\s+([a-zA-Z0-9_\-./\\]+\.(?:ts|js|jsx|tsx))\b/);
     if (jestFileFailMatch) {
@@ -148,9 +162,9 @@ export function extractFailuresFromOutput(output: string, kind: ValidationKind):
       continue;
     }
 
-    // 5. Jest / Vitest individual test failure: "● Suite > test name" or "✕ test name" or "❯ test name"
+    // 5. Jest / Vitest / node:test individual test failure: "● Suite > test name" or "✖ test name" or "✕ test name" or "❯ test name"
     const isReportFooter = line.includes('Test Files') || line.includes('Tests:') || line.includes('Duration:');
-    const jestIndividualFailMatch = line.match(/(?:✕|×|❯|●)\s+(?:.*?>\s*)?(.*?)(?:\s+\(\d+m?s\))?$/i);
+    const jestIndividualFailMatch = line.match(/(?:✕|×|❯|●|✖|✗)\s+(?:.*?>\s*)?(.*?)(?:\s+\(\d+m?s\))?$/u);
     if (jestIndividualFailMatch && !isReportFooter) {
       const candidateName = jestIndividualFailMatch[1].trim();
       if (candidateName && candidateName.length > 2 && !candidateName.startsWith('http')) {
@@ -166,18 +180,29 @@ export function extractFailuresFromOutput(output: string, kind: ValidationKind):
       }
     }
 
-    const jestAssertionMatch = line.match(/(?:AssertionError|Error):\s+(.*)/i);
+    const jestAssertionMatch = line.match(/(?:AssertionError(?:\s*\[[^\]]+\])?|Error):\s*(.*)/i);
     if (jestAssertionMatch) {
       if (!currentFailure) currentFailure = { stackSnippet: [] };
-      currentFailure.message = jestAssertionMatch[1];
+      currentFailure.message = jestAssertionMatch[1] || 'Assertion failed';
+      if (line.includes('ERR_ASSERTION') || line.includes('strictly equal') || line.includes('deep-equal')) {
+        capturingDiff = true;
+      }
     } else if (cargoAssertMatch) {
       if (!currentFailure) currentFailure = { stackSnippet: [] };
       currentFailure.message = cargoAssertMatch[0];
     }
 
+    // Node:test comparison (e.g. "401 !== 200")
+    const nodeComparisonMatch = line.match(/^([a-zA-Z0-9_'"]+)\s*(!==|!=)\s*([a-zA-Z0-9_'"]+)$/);
+    if (nodeComparisonMatch && currentFailure && !currentFailure.diff) {
+      currentFailure.diff = `- expected: ${nodeComparisonMatch[3]}\n+ received: ${nodeComparisonMatch[1]}`;
+      currentFailure.expected = nodeComparisonMatch[3];
+      currentFailure.received = nodeComparisonMatch[1];
+    }
+
     // 5. Multiline diff detection (Jest, Vitest, diffs)
     const vitestExpectedDiffMatch = line.match(/(?:expected|diff:)\s+['"]?(.*?)['"]?\s+to (?:deeply equal|equal|match)\s+['"]?(.*?)['"]?$/i);
-    const diffStartMatch = line.match(/^(?:[-+]\s*(?:Expected|Received)|(?:Expected|Received):)/i);
+    const diffStartMatch = line.match(/^(?:[-+]\s*(?:Expected|Received|actual|expected)|(?:Expected|Received):|\+\s*actual\s*-\s*expected)/i);
 
     if (vitestExpectedDiffMatch) {
       if (!currentFailure) currentFailure = { stackSnippet: [] };
@@ -191,7 +216,7 @@ export function extractFailuresFromOutput(output: string, kind: ValidationKind):
     } else if (capturingDiff) {
       // While capturing diff, accumulate diff lines (+, -, spaces, object properties)
       const isDiffContinuation = /^[ \t]*[-+]/m.test(rawLine) ||
-        /^[ \t]+(?:Object|Array|\{|\}|"[^"]+":)/.test(rawLine) ||
+        /^[ \t]+(?:Object|Array|\{|\}|"[^"]+":|[a-zA-Z0-9_]+:)/.test(rawLine) ||
         line.startsWith('-') || line.startsWith('+');
 
       if (isDiffContinuation) {
@@ -213,7 +238,7 @@ export function extractFailuresFromOutput(output: string, kind: ValidationKind):
     }
 
     // 6. File & Line matching
-    const fileLineMatch = line.match(/(?:at\s+(?:.*?\()?)?([a-zA-Z0-9_\-./\\]+\.(?:ts|js|jsx|tsx|py|rs|go|dart)):(\d+)(?::\d+)?\)?/);
+    const fileLineMatch = line.match(/(?:at\s+(?:.*?\()?)?([a-zA-Z0-9_\-./\\]+\.(?:ts|js|jsx|tsx|mjs|cjs|py|rs|go|dart)):(\d+)(?::\d+)?\)?/);
     if (fileLineMatch && currentFailure) {
       const matchPath = fileLineMatch[1];
       if (!matchPath.includes('node_modules') && !matchPath.includes('.cargo') && !matchPath.includes('site-packages')) {
