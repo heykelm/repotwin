@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { buildValidationPlan, runValidationCommand, runValidationPlan, validationConsentToken, ValidationCommand } from '../src/verification/command-runner.js';
+import { buildValidationPlan, runValidationCommand, runValidationPlan, validationConsentToken, ValidationCommand, MAX_RETRIEVABLE_LOG_BYTES } from '../src/verification/command-runner.js';
 
 describe('project command verification', () => {
   it('builds only known shell-free commands and binds consent to the plan', () => {
@@ -22,10 +22,23 @@ describe('project command verification', () => {
       executable: process.execPath, args: ['-e', "process.stdout.write('x'.repeat(200))"], display: 'node output'
     };
     try {
-      const passed = await runValidationCommand(dir, command, { maxOutputBytes: 32 });
+      const passed = await runValidationCommand(dir, command, { maxOutputBytes: 32, retainFullOutput: true });
       expect(passed.status).toBe('passed');
       expect(passed.output.length).toBe(32);
       expect(passed.outputTruncated).toBe(true);
+      expect(passed.fullOutput).toHaveLength(200);
+      expect(passed.fullOutputTruncated).toBe(false);
+
+      const long = await runValidationCommand(dir, { ...command, id: 'late-diagnostic', args: ['-e', "process.stdout.write('x'.repeat(100000) + '\\nLATE_SENTINEL')"] }, { retainFullOutput: true });
+      expect(long.outputTruncated).toBe(true);
+      expect(long.output).not.toContain('LATE_SENTINEL');
+      expect(long.fullOutput).toContain('LATE_SENTINEL');
+      expect(long.fullOutputTruncated).toBe(false);
+      const ordinary = await runValidationCommand(dir, command, { maxOutputBytes: 32 });
+      expect(ordinary.outputTruncated).toBe(true);
+      expect(ordinary.fullOutput).toBeUndefined();
+      const whitespace = await runValidationCommand(dir, { ...command, args: ['-e', "process.stdout.write('  value\\n\\n')"] }, { retainFullOutput: true });
+      expect(whitespace.fullOutput).toBe('  value\n\n');
 
       const timedOut = await runValidationCommand(dir, {
         ...command,
@@ -55,6 +68,39 @@ describe('project command verification', () => {
       const results = await runValidationPlan(dir, [failingInstall, test]);
       expect(results.map(result => result.status)).toEqual(['failed', 'unavailable']);
       expect(results[1]?.output).toContain('install failed');
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('rejects a subproject symlink that escapes the twin', async () => {
+    const twin = fs.mkdtempSync(path.join(os.tmpdir(), 'rt-path-'));
+    const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'rt-outside-'));
+    try {
+      fs.symlinkSync(outside, path.join(twin, 'external'), 'dir');
+      const command: ValidationCommand = {
+        id: 'escaped', project: 'external', relPath: 'external', kind: 'test',
+        executable: process.execPath, args: ['-e', ''], display: 'node'
+      };
+      await expect(runValidationCommand(twin, command)).rejects.toThrow('escapes the twin');
+    } finally {
+      fs.rmSync(twin, { recursive: true, force: true });
+      fs.rmSync(outside, { recursive: true, force: true });
+    }
+  });
+
+  it('marks logs exceeding the retrieval cap without growing the retained output', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'rt-log-cap-'));
+    try {
+      const command: ValidationCommand = {
+        id: 'large-log', project: 'fixture', relPath: '.', kind: 'test',
+        executable: process.execPath,
+        args: ['-e', `process.stdout.write('x'.repeat(${MAX_RETRIEVABLE_LOG_BYTES + 1024}))`],
+        display: 'node large log'
+      };
+      const result = await runValidationCommand(dir, command, { retainFullOutput: true });
+      expect(Buffer.byteLength(result.fullOutput ?? '')).toBe(MAX_RETRIEVABLE_LOG_BYTES);
+      expect(result.fullOutputTruncated).toBe(true);
     } finally {
       fs.rmSync(dir, { recursive: true, force: true });
     }

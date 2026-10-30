@@ -57,7 +57,8 @@ export function extractFailuresFromOutput(output: string, kind: ValidationKind):
 
   function finalizeDiff() {
     if (capturingDiff && diffLines.length > 0 && currentFailure) {
-      currentFailure.diff = diffLines.join('\n');
+      const captured = diffLines.join('\n');
+      if (!currentFailure.diff) currentFailure.diff = captured;
       if (!currentFailure.message) {
         currentFailure.message = 'Assertion failed (value mismatch)';
       }
@@ -154,6 +155,9 @@ export function extractFailuresFromOutput(output: string, kind: ValidationKind):
     // 4. Jest failing file header: "FAIL path/to/file.test.ts"
     const jestFileFailMatch = line.match(/^FAIL\s+([a-zA-Z0-9_\-./\\]+\.(?:ts|js|jsx|tsx))\b/);
     if (jestFileFailMatch) {
+      if (currentFailure?.testName || currentFailure?.message || currentFailure?.diff) {
+        pushCurrent();
+      }
       if (!currentFailure) {
         currentFailure = { file: jestFileFailMatch[1], stackSnippet: [] };
       } else if (!currentFailure.file) {
@@ -164,10 +168,10 @@ export function extractFailuresFromOutput(output: string, kind: ValidationKind):
 
     // 5. Jest / Vitest / node:test individual test failure: "● Suite > test name" or "✖ test name" or "✕ test name" or "❯ test name"
     const isReportFooter = line.includes('Test Files') || line.includes('Tests:') || line.includes('Duration:');
-    const jestIndividualFailMatch = line.match(/(?:✕|×|❯|●|✖|✗)\s+(?:.*?>\s*)?(.*?)(?:\s+\(\d+m?s\))?$/u);
+    const jestIndividualFailMatch = line.match(/(?:✕|×|❯|●|✖|✗)\s+(?:.*?>\s*)?(.*?)$/u);
     if (jestIndividualFailMatch && !isReportFooter) {
-      const candidateName = jestIndividualFailMatch[1].trim();
-      if (candidateName && candidateName.length > 2 && !candidateName.startsWith('http')) {
+      const candidateName = jestIndividualFailMatch[1].trim().replace(/\s+\(\d+(?:\.\d+)?\s*(?:ms|s)\)$/u, '');
+      if (candidateName && candidateName.length > 2 && !candidateName.startsWith('http') && !/^failing tests:?$/i.test(candidateName)) {
         if (currentFailure && !currentFailure.testName) {
           currentFailure.testName = candidateName;
         } else {
@@ -198,6 +202,14 @@ export function extractFailuresFromOutput(output: string, kind: ValidationKind):
       currentFailure.diff = `- expected: ${nodeComparisonMatch[3]}\n+ received: ${nodeComparisonMatch[1]}`;
       currentFailure.expected = nodeComparisonMatch[3];
       currentFailure.received = nodeComparisonMatch[1];
+    }
+
+    // Jest prints complete operands on dedicated lines. Keep their original
+    // contents, including URLs or spaces, in the structured failure.
+    const jestValueMatch = line.match(/^(Expected|Received):\s*(.*)$/);
+    if (jestValueMatch && currentFailure) {
+      const field = jestValueMatch[1].toLowerCase() === 'expected' ? 'expected' : 'received';
+      currentFailure[field] = jestValueMatch[2];
     }
 
     // 5. Multiline diff detection (Jest, Vitest, diffs)
@@ -277,7 +289,38 @@ export function extractFailuresFromOutput(output: string, kind: ValidationKind):
     }
   }
 
-  return failures;
+  // Jest and node:test repeat a failed test as an announcement and a detailed
+  // block. Merge only when one record has no diagnostic; two genuine failures
+  // with the same title must remain separate.
+  const hasDetail = (failure: ExtractedFailure): boolean => Boolean(
+    failure.message || failure.diff || failure.expected || failure.received || failure.stackSnippet?.length
+  );
+  const sameFile = (a?: string, b?: string): boolean => {
+    if (!a || !b) return true;
+    const normalized = (file: string) => file.replace(/^file:\/\//, '').replace(/^(?:\.\.\/)+/, '').replace(/^\/+/, '');
+    const left = normalized(a), right = normalized(b);
+    return left === right || left.endsWith(`/${right}`) || right.endsWith(`/${left}`);
+  };
+  const deduped: ExtractedFailure[] = [];
+  for (const failure of failures) {
+    const index = deduped.findIndex(previous =>
+      failure.testName && previous.testName === failure.testName && sameFile(previous.file, failure.file) &&
+      (!hasDetail(previous) || !hasDetail(failure))
+    );
+    if (index < 0) { deduped.push(failure); continue; }
+    const previous = deduped[index];
+    const detailed = hasDetail(failure) ? failure : previous;
+    const other = detailed === failure ? previous : failure;
+    detailed.file ??= other.file;
+    detailed.line ??= other.line;
+    detailed.message ??= other.message;
+    detailed.expected ??= other.expected;
+    detailed.received ??= other.received;
+    detailed.diff ??= other.diff;
+    if (!detailed.stackSnippet?.length) detailed.stackSnippet = other.stackSnippet;
+    deduped[index] = detailed;
+  }
+  return deduped;
 }
 
 /**
@@ -348,8 +391,12 @@ export function sieveCommandOutput(
   }
 
   // Anti-blindness fallback: if no failure or if extracted failure lacks actionable details (message, diff, location)
-  const hasActionableDetail = failures.some(f => Boolean(f.message || f.diff || (f.file && f.line)));
-  if (failures.length === 0 || !hasActionableDetail) {
+  const hasActionableDetail = (failure: ExtractedFailure): boolean => Boolean(
+    failure.diff || failure.expected || failure.received ||
+    (failure.message && failure.message !== 'Assertion failed (value mismatch)') ||
+    (failure.file && failure.line)
+  );
+  if (failures.length === 0 || failures.some(failure => !hasActionableDetail(failure))) {
     const fallbackLines = clean.split('\n')
       .map(l => l.trimEnd())
       .filter(l => l.trim().length > 0 && !l.includes('node_modules') && !l.includes('node:internal'))

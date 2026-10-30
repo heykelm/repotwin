@@ -48,7 +48,9 @@ Test output can consume part of an agent's context. RepoTwin can summarize captu
 
 Failure summaries are best effort. The MCP response also includes the captured raw output so that partially recognized failures remain visible. Output capture is bounded; `outputTruncated` indicates when part of the command output was not captured. Successful commands return their status without their logs.
 
-**No token, quota, or cost savings have been measured.** A shorter summary does not establish savings for the whole agent task, and including raw diagnostics may make the response larger.
+For an opt-in smaller initial response, pass `lazyLogs: true` to `repotwin_run_checks`. Failed checks include a `commandId` as `id`; use that ID and the candidate ID with `repotwin_get_log` to retrieve missing details by `tail`, `offset`/`limit`, or bounded byte pages. Successful checks also expose their ID. Logs are kept only in the current MCP session up to 8 MiB per command; inspect `retrievableLogTruncated` before relying on them. The inline `outputTruncated` flag describes the separate 64 KiB response limit. Re-running a command replaces its retained log. A summary may omit important information; inspect the log when in doubt.
+
+**No general token, quota, or cost saving has been established.** Exploratory agent runs have shown both increases and decreases. A shorter summary does not establish savings for the whole task, and reading logs or other files adds context. See the [evaluation notes](https://github.com/heykelm/repotwin/blob/main/docs/benchmarks/REAL-WORKFLOW-EVALUATION.md) for scope and limitations.
 
 ### 3. Context Budget Audit (`repotwin analyze`)
 RepoTwin statically audits your repository for AI token efficiency:
@@ -62,7 +64,7 @@ RepoTwin is engineered for reliable execution across all major platforms with mi
 
 - **Platforms**: CI runs on Linux with Node.js 22 and 24; local release verification also uses macOS. Windows paths and command names are handled in code, but Windows execution is not covered by the current CI matrix.
 - **Local UI**: Compiled React assets are served from the installed package on `127.0.0.1`. No hosted application or AI API key is needed.
-- **Bounded command output**: Captured stdout/stderr defaults to 64 KiB per command. Truncation is reported explicitly.
+- **Bounded command output**: Inline stdout/stderr defaults to 64 KiB per command. MCP keeps up to 8 MiB per command in session memory for paginated `repotwin_get_log` retrieval. Both inline and retrievable truncation are reported explicitly; logs expire when the server ends, the candidate is cleaned, or the command is rerun.
 - **Bounded Concurrency**: Subproject checks default to 3 concurrent workers (`REPOTWIN_CONCURRENCY=3`), preventing CPU and RAM exhaustion on large monorepos with dozens of projects.
 - **Disk-Efficient Git Twins**: Twins leverage `git worktree add`, sharing Git object storage with your primary repository without duplicating repository history. All temporary twins are cleanly removed upon completion.
 

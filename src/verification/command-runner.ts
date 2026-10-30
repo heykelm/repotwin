@@ -23,7 +23,12 @@ export interface ValidationResult extends ValidationCommand {
   durationMs: number;
   output: string;
   outputTruncated: boolean;
+  /** Session-scoped raw output for paginated MCP retrieval (bounded separately from output). */
+  fullOutput?: string;
+  fullOutputTruncated?: boolean;
 }
+
+export const MAX_RETRIEVABLE_LOG_BYTES = 8 * 1024 * 1024;
 
 const ALLOWED_COMMANDS = new Map<string, { executable: string; args: string[] }>([
   ['npm ci', { executable: 'npm', args: ['ci', '--no-audit', '--no-fund'] }],
@@ -103,8 +108,8 @@ function executionEnvironment(): NodeJS.ProcessEnv {
 }
 
 function assertWorkingDirectory(root: string, relPath: string): string {
-  const resolvedRoot = path.resolve(root);
-  const cwd = path.resolve(resolvedRoot, relPath);
+  const resolvedRoot = fs.realpathSync(root);
+  const cwd = fs.realpathSync(path.resolve(resolvedRoot, relPath));
   const relative = path.relative(resolvedRoot, cwd);
   if (relative === '..' || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) {
     throw new Error(`Validation path escapes the twin: ${relPath}`);
@@ -115,7 +120,7 @@ function assertWorkingDirectory(root: string, relPath: string): string {
 export async function runValidationCommand(
   twinPath: string,
   command: ValidationCommand,
-  options: { timeoutMs?: number; maxOutputBytes?: number } = {}
+  options: { timeoutMs?: number; maxOutputBytes?: number; retainFullOutput?: boolean } = {}
 ): Promise<ValidationResult> {
   const timeoutMs = options.timeoutMs ?? (command.kind === 'install' ? 600_000 : 120_000);
   const maxOutputBytes = options.maxOutputBytes ?? 64 * 1024;
@@ -126,6 +131,9 @@ export async function runValidationCommand(
     let output = '';
     let outputBytes = 0;
     let outputTruncated = false;
+    const logChunks: Buffer[] = [];
+    let logBytes = 0;
+    let fullOutputTruncated = false;
     let timedOut = false;
     let settled = false;
     const isWin = process.platform === 'win32';
@@ -141,6 +149,15 @@ export async function runValidationCommand(
     });
 
     const append = (chunk: Buffer): void => {
+      if (options.retainFullOutput) {
+        const logRemaining = MAX_RETRIEVABLE_LOG_BYTES - logBytes;
+        if (logRemaining > 0) {
+          const keptLog = chunk.subarray(0, logRemaining);
+          logChunks.push(keptLog);
+          logBytes += keptLog.length;
+        }
+        if (chunk.length > logRemaining) fullOutputTruncated = true;
+      }
       if (outputBytes >= maxOutputBytes) {
         outputTruncated = true;
         return;
@@ -159,7 +176,10 @@ export async function runValidationCommand(
       settled = true;
       clearTimeout(timer);
       if (message) output += `${output ? '\n' : ''}${message}`;
-      resolve({ ...command, status, exitCode, durationMs: Date.now() - startedAt, output: output.trim(), outputTruncated });
+      const fullOutput = options.retainFullOutput
+        ? Buffer.concat(logChunks).toString('utf8') + (message ? `${logBytes ? '\n' : ''}${message}` : '')
+        : undefined;
+      resolve({ ...command, status, exitCode, durationMs: Date.now() - startedAt, output: output.trim(), outputTruncated, fullOutput, fullOutputTruncated: options.retainFullOutput ? fullOutputTruncated : undefined });
     };
 
     child.once('error', error => finish('unavailable', null, `Unable to start command: ${error.message}`));
@@ -200,6 +220,7 @@ export async function runValidationPlan(
   options: {
     timeoutMs?: number;
     maxOutputBytes?: number;
+    retainFullOutput?: boolean;
     concurrency?: number;
     onProgress?: (event: ValidationProgressEvent) => void;
   } = {}

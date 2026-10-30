@@ -21,14 +21,14 @@ const fixtures = [
     source: `const { test } = require('node:test');
 const assert = require('node:assert/strict');
 test('authorization rejects wrong status', () => assert.equal(401, 200));\n`,
-    expected: ['authorization rejects wrong status', '401', '200']
+    expected: ['authorization rejects wrong status', '401', '200'], expectedFailureCount: 1
   },
   {
     name: 'multiline', kind: 'test', script: 'node --test suite.test.cjs',
     source: `const { test } = require('node:test');
 const assert = require('node:assert/strict');
 test('profile object is complete', () => assert.deepEqual({ role: 'viewer', enabled: false, nested: { region: 'eu' } }, { role: 'admin', enabled: true, nested: { region: 'us' } }));\n`,
-    expected: ['profile object is complete', 'viewer', 'admin', 'region']
+    expected: ['profile object is complete', 'viewer', 'admin', 'region'], expectedFailureCount: 1
   },
   {
     name: 'multiple-errors', kind: 'test', script: 'node --test suite.test.cjs',
@@ -37,14 +37,14 @@ const assert = require('node:assert/strict');
 test('first sentinel', () => assert.equal('ALPHA_ACTUAL', 'ALPHA_EXPECTED'));
 test('second sentinel', () => assert.equal('BETA_ACTUAL', 'BETA_EXPECTED'));
 test('third sentinel', () => assert.equal('GAMMA_ACTUAL', 'GAMMA_EXPECTED'));\n`,
-    expected: ['first sentinel', 'second sentinel', 'third sentinel', 'ALPHA_ACTUAL', 'BETA_ACTUAL', 'GAMMA_ACTUAL']
+    expected: ['first sentinel', 'second sentinel', 'third sentinel', 'ALPHA_ACTUAL', 'BETA_ACTUAL', 'GAMMA_ACTUAL'], expectedFailureCount: 3
   },
   {
     name: 'large-logs', kind: 'test', script: 'node --test suite.test.cjs',
     source: `const { test } = require('node:test');
 const assert = require('node:assert/strict');
 test('large log sentinel', () => { for (let i = 0; i < 1100; i++) console.log('NOISE_' + String(i).padStart(4, '0') + ' ' + 'x'.repeat(80)); assert.equal('LARGE_ACTUAL', 'LARGE_EXPECTED'); });\n`,
-    expected: []
+    expected: ['large log sentinel', 'LARGE_ACTUAL', 'LARGE_EXPECTED'], expectedFailureCount: 1
   },
   {
     name: 'typescript-errors', kind: 'build', script: `node ${path.join(root, 'node_modules', 'typescript', 'bin', 'tsc')} --noEmit --pretty false`,
@@ -83,7 +83,7 @@ function makeRepo(fixture) {
 
 async function run() {
   console.log('=== BENCHMARK TWO-TIER (Lazy Logs) vs RAW ===\n');
-  console.log('| Fixture | Raw Response | Two-Tier Response | Delta Bytes | Sentinels Present in Summary? |');
+  console.log('| Fixture | Raw Response | Two-Tier Response | Delta Bytes | Diagnostics Verified? |');
   console.log('| :--- | ---: | ---: | ---: | :---: |');
 
   for (const fixture of fixtures) {
@@ -106,7 +106,27 @@ async function run() {
 
     const twoTierJson = JSON.parse(twoTierText);
     const summary = twoTierJson.failures[0]?.errorOutput ?? '';
-    const allSentinelsPresent = fixture.expected.every(s => summary.includes(s));
+    assert.ok(fixture.expected.length > 0, `${fixture.name}: empty diagnostic assertion`);
+    assert.equal(twoTierJson.failedCount, 1, `${fixture.name}: expected one failed command`);
+    assert.equal(twoTierJson.failures[0].rawOutput, undefined, `${fixture.name}: lazy mode embedded raw output`);
+    if (fixture.expectedFailureCount !== undefined) {
+      assert.equal(twoTierJson.failures[0].extractedFailures?.length, fixture.expectedFailureCount, `${fixture.name}: duplicate or missing parsed failures`);
+    }
+    const structured = JSON.stringify(twoTierJson.failures[0].extractedFailures ?? []);
+    const allSentinelsPresent = fixture.expected.every(s => summary.includes(s) || structured.includes(s));
+    assert.ok(allSentinelsPresent, `${fixture.name}: summary/structured diagnostic missing ${fixture.expected.filter(s => !summary.includes(s) && !structured.includes(s)).join(', ')}`);
+
+    const pieces = [];
+    let offset = 0;
+    while (offset !== null) {
+      const page = JSON.parse(textPayload(await client.callTool({ name: 'repotwin_get_log', arguments: { ...args, commandId: twoTierJson.failures[0].id, offset, limit: 200 } })));
+      assert.ok(page.linesReturned > 0, `${fixture.name}: empty log page`);
+      pieces.push(page.log);
+      offset = page.nextOffset;
+    }
+    const recovered = pieces.join('\n');
+    for (const sentinel of fixture.expected) assert.ok(recovered.includes(sentinel), `${fixture.name}: log missing ${sentinel}`);
+    assert.equal(twoTierJson.failures[0].retrievableLogTruncated, false, `${fixture.name}: log hit retention limit`);
 
     console.log(`| ${fixture.name} | ${rawBytes} B | ${twoTierBytes} B | ${delta > 0 ? '+' : ''}${delta} B (${deltaPercent}%) | ${allSentinelsPresent ? '✅ Yes' : '⚠️ Partial'} |`);
 

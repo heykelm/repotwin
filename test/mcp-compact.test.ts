@@ -144,7 +144,8 @@ describe('MCP Compact & Token Efficiency Tools', () => {
     fs.writeFileSync(path.join(repo, 'package.json'), JSON.stringify({
       name: 'lazy-log-pkg',
       scripts: {
-        test: 'node -e "for(let i=0;i<50;i++) console.log(\'Line \' + i); console.error(\'FAIL test/auth.test.ts\\n  ● Auth > fail\\n    AssertionError: expected 500 to equal 200\\n      at test/auth.test.ts:20:5\\n\'); process.exit(1)"'
+        test: 'node -e "for(let i=0;i<1100;i++) console.log(\'Line \' + i + \' x\'.repeat(40)); console.error(\'FAIL test/auth.test.ts\\n  ● Auth > fail\\n    AssertionError: expected 500 to equal 200\\n      at test/auth.test.ts:20:5\\n\'); process.exit(1)"',
+        lint: 'node -e "console.log(\'LINT_SUCCESS_SENTINEL\')"'
       }
     }, null, 2));
     git(repo, ['add', 'package.json']);
@@ -172,9 +173,19 @@ describe('MCP Compact & Token Efficiency Tools', () => {
 
     expect(verified.canApply).toBe(false);
     expect(verified.failures[0].errorOutput).toContain('test/auth.test.ts:20');
+    expect(verified.failures[0].errorOutput).toContain('500');
     expect(verified.failures[0].rawOutput).toBeUndefined();
     expect(verified.failures[0].logAvailableOnDemand).toBe(true);
-    expect(verified.failures[0].totalLogLines).toBeGreaterThan(40);
+    expect(verified.failures[0].totalLogLines).toBeGreaterThan(1100);
+    expect(verified.failures[0].outputTruncated).toBe(true);
+    expect(verified.failures[0].retrievableLogTruncated).toBe(false);
+    expect(verified.passedCommands).toHaveLength(1);
+    expect(verified.passedCommands[0].id).toBeTruthy();
+    const passedLog = payload(await client.callTool({
+      name: 'repotwin_get_log',
+      arguments: { candidateId: created.candidateId, commandId: verified.passedCommands[0].id }
+    }));
+    expect(passedLog.log).toContain('LINT_SUCCESS_SENTINEL');
 
     const logFetched = payload(await client.callTool({
       name: 'repotwin_get_log',
@@ -188,6 +199,26 @@ describe('MCP Compact & Token Efficiency Tools', () => {
     expect(logFetched.commandId).toBe(verified.failures[0].id);
     expect(logFetched.linesReturned).toBeLessThanOrEqual(10);
     expect(logFetched.log).toContain('test/auth.test.ts');
+    expect(logFetched.log).toContain('500');
+
+    const firstPage = payload(await client.callTool({
+      name: 'repotwin_get_log',
+      arguments: { candidateId: created.candidateId, commandId: verified.failures[0].id, offset: 0, limit: 500 }
+    }));
+    expect(firstPage.linesReturned).toBe(200);
+    expect(firstPage.nextOffset).toBe(200);
+
+    const chunks: Buffer[] = [];
+    let byteOffset: number | null = 0;
+    while (byteOffset !== null) {
+      const page = payload(await client.callTool({
+        name: 'repotwin_get_log',
+        arguments: { candidateId: created.candidateId, commandId: verified.failures[0].id, byteOffset, byteLimit: 16 * 1024 }
+      }));
+      chunks.push(Buffer.from(page.logBase64, 'base64'));
+      byteOffset = page.nextByteOffset;
+    }
+    expect(Buffer.concat(chunks).toString('utf8')).toContain('expected 500 to equal 200');
 
     await client.close();
   });

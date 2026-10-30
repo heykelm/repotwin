@@ -188,5 +188,114 @@ failures:
     expect(cargo.compactOutput).toContain('expected: 100');
   });
 
+  it('deduplicates node:test announcements and keeps the comparison in the summary', () => {
+    const output = `✖ authorization rejects wrong status (0.6ms)
+ℹ tests 1
+ℹ fail 1
+
+✖ failing tests:
+
+test at suite.test.cjs:3:1
+✖ authorization rejects wrong status (0.6ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+
+  401 !== 200
+
+      at TestContext.<anonymous> (suite.test.cjs:3:60) {
+    generatedMessage: true,
+    actual: 401,
+    expected: 200,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }`;
+    const result = sieveCommandOutput(output, 'test', 'failed');
+    expect(result.failures).toHaveLength(1);
+    expect(result.summary).toContain('1 failure');
+    expect(result.compactOutput).toContain('401');
+    expect(result.compactOutput).toContain('200');
+    expect(result.failures[0]).toMatchObject({ expected: '200', received: '401' });
+  });
+
+  it('keeps the historical Jest URL mismatch once with complete operands', () => {
+    // Reduced verbatim failure section from
+    // docs/benchmarks/historical-link-comparison-2026-10-30/runs/summary/artifacts/1.raw.txt.
+    const output = `  console.warn
+    [FCM] FIREBASE_SERVICE_ACCOUNT not configured, push notifications disabled
+
+FAIL __tests__/services/serviceRequestNotifications.test.js
+  ✓ client outgoing messages never queue email notifications to client contact_email
+  ✕ artisan incoming messages queue email notification to client contact_email (2 ms)
+
+  ● artisan incoming messages queue email notification to client contact_email
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: "https://services.nicehub.app/demande/secret-token-42"
+    Received: "https://services.nicehub.app/intervention/42"
+
+      at Object.<anonymous> (__tests__/services/serviceRequestNotifications.test.js:157:38)
+
+PASS __tests__/services/serviceRequestRules.test.js
+Test Suites: 1 failed, 1 passed, 2 total
+Tests:       1 failed, 20 passed, 21 total`;
+    const result = sieveCommandOutput(output, 'test', 'failed');
+    expect(result.failures).toHaveLength(1);
+    expect(result.summary).toContain('1 failure');
+    expect(result.failures[0]).toMatchObject({
+      testName: 'artisan incoming messages queue email notification to client contact_email',
+      file: '__tests__/services/serviceRequestNotifications.test.js',
+      line: 157,
+      expected: '"https://services.nicehub.app/demande/secret-token-42"',
+      received: '"https://services.nicehub.app/intervention/42"'
+    });
+    expect(result.compactOutput).toContain('https://services.nicehub.app/demande/secret-token-42');
+    expect(result.compactOutput).toContain('https://services.nicehub.app/intervention/42');
+    expect(result.compactOutput).not.toContain('FIREBASE_SERVICE_ACCOUNT');
+  });
+
+  it('keeps distinct Jest failures even when two files use the same test title', () => {
+    const output = `FAIL test/orders.test.js
+  ✕ saves expected value (2 ms)
+  ✕ reports denied access (1 ms)
+
+  ● saves expected value
+    Expected: "ORDER_EXPECTED"
+    Received: "ORDER_ACTUAL"
+      at Object.<anonymous> (test/orders.test.js:12:3)
+
+  ● reports denied access
+    Expected: 403
+    Received: 200
+      at Object.<anonymous> (test/orders.test.js:20:3)
+
+FAIL test/invoices.test.js
+  ✕ saves expected value (3 ms)
+  ● saves expected value
+    Expected: "INVOICE_EXPECTED"
+    Received: "INVOICE_ACTUAL"
+      at Object.<anonymous> (test/invoices.test.js:8:3)
+
+Tests: 3 failed, 0 passed, 3 total`;
+    const result = sieveCommandOutput(output, 'test', 'failed');
+    expect(result.failures).toHaveLength(3);
+    expect(result.failures.map(f => [f.file, f.testName, f.expected, f.received])).toEqual([
+      ['test/orders.test.js', 'saves expected value', '"ORDER_EXPECTED"', '"ORDER_ACTUAL"'],
+      ['test/orders.test.js', 'reports denied access', '403', '200'],
+      ['test/invoices.test.js', 'saves expected value', '"INVOICE_EXPECTED"', '"INVOICE_ACTUAL"']
+    ]);
+    expect(result.summary).toContain('3 failures');
+  });
+
+  it('retains a bounded raw tail when a recognized test title has no usable diagnostic', () => {
+    const output = `FAIL test/opaque.test.js
+  ✕ opaque failure (1 ms)
+  runner detail: remote worker stopped before assertion output
+Tests: 1 failed, 0 passed, 1 total`;
+    const result = sieveCommandOutput(output, 'test', 'failed');
+    expect(result.failures).toHaveLength(1);
+    expect(result.compactOutput).toContain('Diagnostic output:');
+    expect(result.compactOutput).toContain('remote worker stopped before assertion output');
+  });
+
 });
 

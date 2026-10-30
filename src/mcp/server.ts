@@ -17,7 +17,7 @@ import { auditInstructions } from '../analyzer/instruction-audit.js';
 import { createCandidateTwin, candidateIsIntact, cleanCandidateIgnoredArtifacts, cleanTwins, TwinResult } from '../twin/worktree-manager.js';
 import { applyRecipe, rollbackBackup } from '../generator/apply-recipe.js';
 import { generateHtmlReport } from '../report/html-generator.js';
-import { buildValidationPlan, runValidationPlan, validationConsentToken, ValidationCommand, ValidationResult } from '../verification/command-runner.js';
+import { buildValidationPlan, runValidationPlan, validationConsentToken, ValidationCommand, ValidationResult, MAX_RETRIEVABLE_LOG_BYTES } from '../verification/command-runner.js';
 import { saveApplicationSnapshot, ApplicationSnapshot } from '../report/application-snapshot.js';
 import { SubprojectInfo } from '../types/index.js';
 import { REPOTWIN_VERSION } from '../version.js';
@@ -157,7 +157,7 @@ export function createMcpServer(defaultRepoPath: string = process.cwd()): Server
               },
               lazyLogs: {
                 type: 'boolean',
-                description: 'If true, returns surgical failure summary and logId without embedding the full raw terminal dump in the JSON response. Full logs can be fetched on demand via repotwin_get_log.'
+                description: 'If true, returns a failure summary without embedding raw output. Captured logs (up to 8 MiB per command) can be fetched during this MCP session via repotwin_get_log.'
               }
             },
             required: ['candidateId', 'commandConsent'],
@@ -166,7 +166,7 @@ export function createMcpServer(defaultRepoPath: string = process.cwd()): Server
         },
         {
           name: 'repotwin_get_log',
-          description: 'Retrieve full or paginated raw command output for an executed check in a candidate twin on demand, preventing large log dumps from saturating the agent conversation history.',
+          description: 'Retrieve a bounded page of raw command output (up to 200 lines and 64 KiB per call), or base64 byte chunks for very long lines. Logs are retained in memory until this MCP server ends, the candidate is cleaned, or that command is rerun; at most 8 MiB is retained per command.',
           annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
           inputSchema: {
             type: 'object',
@@ -190,6 +190,14 @@ export function createMcpServer(defaultRepoPath: string = process.cwd()): Server
               limit: {
                 type: 'number',
                 description: 'Maximum number of lines to return.'
+              },
+              byteOffset: {
+                type: 'number',
+                description: '0-based byte offset for base64 chunk retrieval (use for lines larger than 64 KiB). Cannot be combined with line paging.'
+              },
+              byteLimit: {
+                type: 'number',
+                description: 'Maximum raw bytes in a base64 chunk, capped at 48 KiB.'
               }
             },
             required: ['candidateId', 'commandId'],
@@ -414,7 +422,7 @@ export function createMcpServer(defaultRepoPath: string = process.cwd()): Server
           const startedAt = Date.now();
           const after = auditInstructions(candidate.twin.twinPath, candidate.projects);
           const { introduced, resolved } = compareInstructionAudits(candidate.before, after);
-          const targetResults = await runValidationPlan(candidate.twin.twinPath, planToRun);
+          const targetResults = await runValidationPlan(candidate.twin.twinPath, planToRun, { retainFullOutput: true });
           assertSourceUnchanged(candidate.repoPath, candidate.sourceState);
           if (planToRun.length < candidate.validationPlan.length && candidate.commandResults.length > 0) {
             const byId = new Map(candidate.commandResults.map(result => [result.id, result]));
@@ -451,7 +459,7 @@ export function createMcpServer(defaultRepoPath: string = process.cwd()): Server
           const isCompact = args.compactOutput !== false;
           const isLazy = args.lazyLogs === true;
           const failures = failed.map(f => {
-            const sieve = isCompact ? sieveCommandOutput(f.output, f.kind, f.status) : undefined;
+            const sieve = isCompact ? sieveCommandOutput(f.fullOutput ?? f.output, f.kind, f.status) : undefined;
             return {
               id: f.id,
               project: f.project,
@@ -466,8 +474,9 @@ export function createMcpServer(defaultRepoPath: string = process.cwd()): Server
               errorOutput: sieve ? sieve.compactOutput : f.output,
               rawOutput: isCompact ? (isLazy ? undefined : f.output) : undefined,
               outputTruncated: f.outputTruncated,
+              retrievableLogTruncated: f.fullOutputTruncated ?? f.outputTruncated,
               logAvailableOnDemand: isLazy ? true : undefined,
-              totalLogLines: f.output.split('\n').length,
+              totalLogLines: (f.fullOutput ?? f.output).split('\n').length,
               extractedFailures: sieve && sieve.failures.length > 0 ? sieve.failures : undefined
             };
           });
@@ -489,10 +498,11 @@ export function createMcpServer(defaultRepoPath: string = process.cwd()): Server
                   tokenEfficiency: {
                     compactMode: isCompact,
                     measuredSavings: null,
-                    note: 'Failure output includes the captured raw diagnostic; token savings have not been measured. Output may be truncated as indicated per command.'
+                    note: 'Payload size is not token usage. Lazy logs remain available during this MCP session up to the per-command retention limit.'
                   },
                   failures,
                   passedCommands: passed.map(p => ({
+                    id: p.id,
                     project: p.project,
                     kind: p.kind,
                     command: p.display,
@@ -634,7 +644,7 @@ export function createMcpServer(defaultRepoPath: string = process.cwd()): Server
           const executeScripts = args.executeProjectScripts === true;
           const startedAt = Date.now();
           const targetResults = executeScripts
-            ? await runValidationPlan(twin.twinPath, validationPlan)
+            ? await runValidationPlan(twin.twinPath, validationPlan, { retainFullOutput: true })
             : [];
           const after = auditInstructions(twin.twinPath, subprojects);
           const { introduced } = compareInstructionAudits(before, after);
@@ -760,15 +770,55 @@ export function createMcpServer(defaultRepoPath: string = process.cwd()): Server
             throw new McpError(ErrorCode.InvalidParams, `Command '${commandId}' not found in candidate execution results.`);
           }
 
-          const allLines = result.output.split('\n');
-          let slice = allLines;
-          if (typeof args.offset === 'number' && args.offset >= 0) {
-            slice = slice.slice(args.offset);
+          if (args.byteOffset !== undefined || args.byteLimit !== undefined) {
+            if (args.offset !== undefined || args.limit !== undefined || args.tail !== undefined) {
+              throw new McpError(ErrorCode.InvalidParams, 'Use byte paging or line paging, not both.');
+            }
+            if (args.byteOffset !== undefined && (!Number.isSafeInteger(args.byteOffset) || Number(args.byteOffset) < 0)) {
+              throw new McpError(ErrorCode.InvalidParams, 'byteOffset must be a non-negative integer.');
+            }
+            if (args.byteLimit !== undefined && (!Number.isSafeInteger(args.byteLimit) || Number(args.byteLimit) < 1)) {
+              throw new McpError(ErrorCode.InvalidParams, 'byteLimit must be a positive integer.');
+            }
+            const bytes = Buffer.from(result.fullOutput ?? result.output, 'utf8');
+            const start = Number(args.byteOffset ?? 0);
+            const count = Math.min(Number(args.byteLimit ?? 48 * 1024), 48 * 1024);
+            const chunk = bytes.subarray(start, start + count);
+            return { content: [{ type: 'text', text: JSON.stringify({
+              commandId: result.id,
+              totalBytes: bytes.length,
+              byteOffset: start,
+              bytesReturned: chunk.length,
+              nextByteOffset: start + chunk.length < bytes.length ? start + chunk.length : null,
+              retrievableLogTruncated: result.fullOutputTruncated ?? result.outputTruncated,
+              retentionLimitBytes: MAX_RETRIEVABLE_LOG_BYTES,
+              logBase64: chunk.toString('base64')
+            }, null, 2) }] };
           }
-          if (typeof args.limit === 'number' && args.limit > 0) {
-            slice = slice.slice(0, args.limit);
-          } else if (typeof args.tail === 'number' && args.tail > 0) {
-            slice = slice.slice(-args.tail);
+
+          for (const key of ['offset', 'limit', 'tail'] as const) {
+            const value = args[key];
+            if (value !== undefined && (!Number.isSafeInteger(value) || (key === 'offset' ? Number(value) < 0 : Number(value) < 1))) {
+              throw new McpError(ErrorCode.InvalidParams, `${key} must be a non-negative integer${key === 'offset' ? '' : ' greater than zero'}`);
+            }
+          }
+          if (args.offset !== undefined && args.tail !== undefined) {
+            throw new McpError(ErrorCode.InvalidParams, 'Use offset or tail, not both.');
+          }
+          const allLines = (result.fullOutput ?? result.output).split('\n');
+          const maxLines = Math.min(Number(args.limit ?? args.tail ?? 50), 200);
+          const start = args.offset !== undefined ? Number(args.offset) : args.tail !== undefined ? Math.max(0, allLines.length - maxLines) : 0;
+          const slice: string[] = [];
+          let pageBytes = 0;
+          for (let index = start; index < Math.min(allLines.length, start + maxLines); index++) {
+            const line = allLines[index];
+            const lineBytes = Buffer.byteLength(line) + (slice.length ? 1 : 0);
+            if (pageBytes + lineBytes > 64 * 1024) {
+              if (slice.length === 0) throw new McpError(ErrorCode.InvalidParams, 'A single log line exceeds the 64 KiB page limit. Use byteOffset to retrieve base64 chunks.');
+              break;
+            }
+            slice.push(line);
+            pageBytes += lineBytes;
           }
 
           return {
@@ -785,6 +835,9 @@ export function createMcpServer(defaultRepoPath: string = process.cwd()): Server
                   totalLines: allLines.length,
                   linesReturned: slice.length,
                   outputTruncated: result.outputTruncated,
+                  retrievableLogTruncated: result.fullOutputTruncated ?? result.outputTruncated,
+                  retentionLimitBytes: MAX_RETRIEVABLE_LOG_BYTES,
+                  nextOffset: start + slice.length < allLines.length ? start + slice.length : null,
                   log: slice.join('\n')
                 }, null, 2)
               }

@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.1
+
+- Retain bounded command logs for the active MCP session and retrieve them in pages with `repotwin_get_log`; opt in to shorter initial failure responses with `lazyLogs`.
+- Preserve diagnostics beyond the inline 64 KiB limit up to a separate 8 MiB per-command session limit, with explicit truncation indicators.
+- Improve test-failure summaries and document that initial payload reductions do not establish task-level token, cost or quota savings.
+- Keep extended MCP logs out of Studio and revision comparison responses.
+
 ## 0.3.0
 
 - **Twin Compact Sieve**: Provides best-effort summaries of test output in MCP checks (`repotwin_run_checks`). Diagnostic extraction may be incomplete; no token savings have been measured.

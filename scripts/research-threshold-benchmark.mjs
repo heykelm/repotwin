@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
-// Log sizes to simulate
+// Scenario inputs chosen for a model, not measured fixtures or provider usage.
 const TEST_PROFILES = [
   { name: 'Tiny (10 lines)', lines: 10, rawBytes: 850, noisePercent: 0.30 },
   { name: 'Small (40 lines)', lines: 40, rawBytes: 3200, noisePercent: 0.65 },
@@ -74,7 +74,7 @@ function computeCumulativeContext(turns, profile, strategy, promptBase = 4000, d
   };
 }
 
-console.log('=== EXPERIMENT 1: Single-Turn Payload Size by Log Profile ===');
+console.log('=== SIMULATION 1: Modeled Single-Turn Payload by Log Profile ===');
 console.log('| Profile | Raw (v0.2 Capped 2k) | Dual (Current v0.3) | Pure Compact | Two-Tier (No Fetch) | Two-Tier (With Fetch) |');
 console.log('| :--- | :---: | :---: | :---: | :---: | :---: |');
 
@@ -88,9 +88,9 @@ for (const profile of TEST_PROFILES) {
   console.log(`| ${profile.name} | ${raw} B | ${dual} B (${((dual - raw) / raw * 100).toFixed(1)}%) | ${pure} B (${((pure - raw) / raw * 100).toFixed(1)}%) | ${twoTierNo} B (${((twoTierNo - raw) / raw * 100).toFixed(1)}%) | ${twoTierYes} B |`);
 }
 
-console.log('\n=== EXPERIMENT 2: Multi-Turn Cumulative Context (Typical Medium Suite, 4 Turns) ===');
+console.log('\n=== SIMULATION 2: Modeled Multi-Turn Context (Medium Profile, 4 Turns) ===');
 console.log('Profile: 120 lines (~9.8 KB raw test output), 4 debug turns, Base prompt: 4,000 tokens\n');
-console.log('| Strategy | Turn 1 | Turn 2 | Turn 3 | Turn 4 | Total Cumulative Billed | Delta vs Raw |');
+console.log('| Strategy | Turn 1 | Turn 2 | Turn 3 | Turn 4 | Modeled Cumulative Context | Delta vs Raw |');
 console.log('| :--- | :---: | :---: | :---: | :---: | :---: | :---: |');
 
 const medProfile = TEST_PROFILES[2];
@@ -106,8 +106,8 @@ for (const strat of ['raw', 'raw_uncapped', 'dual_current', 'pure_compact', 'two
   console.log(`| ${strat} | ${t1} tks | ${t2} tks | ${t3} tks | ${t4.finalActiveContext} tks | ${t4.totalBilledAcrossTurns} tks | ${delta > 0 ? '+' : ''}${delta}% |`);
 }
 
-console.log('\n=== EXPERIMENT 3: Finding the Tipping Point (Crossover Threshold) ===');
-console.log('Finding at what raw output size Pure Compact & Two-Tier beat Raw...\n');
+console.log('\n=== SIMULATION 3: Modeled Crossover Under Fixed Assumptions ===');
+console.log('Checking sampled raw output sizes under the chosen constants; this is not a measured universal threshold.\n');
 
 for (let sizeBytes = 200; sizeBytes <= 8000; sizeBytes += 400) {
   const p = { name: `${sizeBytes} B`, lines: Math.round(sizeBytes / 80), rawBytes: sizeBytes, noisePercent: 0.75 };
